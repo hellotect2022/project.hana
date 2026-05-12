@@ -2,12 +2,14 @@ package com.mpole.hana.gateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
 
 @EnableScheduling
 @SpringBootApplication(scanBasePackages = "com.mpole.hana")
+@ConfigurationPropertiesScan
 public class HanaGatewayApplication {
 
     public static void main(String[] args) {

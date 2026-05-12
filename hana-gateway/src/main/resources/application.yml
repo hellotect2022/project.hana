@@ -38,3 +38,29 @@ server:
         max.request.size: 4194304
 
 
+
+hdt:
+  polling:
+    enabled: true
+    fixed-delay-ms: 1000
+    pipeline-block-timeout: 5s
+
+  kafka:
+    topic:
+      raw: test
+
+  ingestion:
+    tcp:
+      enabled: false
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 0
+      endpoints: []
+
+    modbus:
+      enabled: false
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 0
