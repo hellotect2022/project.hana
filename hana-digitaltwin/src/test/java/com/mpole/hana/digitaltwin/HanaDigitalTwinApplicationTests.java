@@ -1,0 +1,12 @@
+package com.mpole.hana.digitaltwin;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class HanaDigitalTwinApplicationTests {
+
+    @Test
+    void contextLoads() {
+    }
+}

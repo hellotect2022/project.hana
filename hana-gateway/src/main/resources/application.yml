@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: hana-gateway
+
+storage:
+  mssql:
+    driver: "sqlserver"
+    host: 192.168.250.180
+    port: 1433
+    user: sa
+    password: "!Q2w3e4r"
+    database: SI_HANAHQ_T
+
+  postgres:
+    driver: "postgresql"
+    host: 192.168.250.181
+    port: 5432
+    user: testuser
+    password: "1q2w3e"
+    database: hdt
+    schema: core
+
+hana:
+  kafka:
+    topic:
+      raw: test
+
+server:
+  port: 8080
+
+  kafka:
+    bootstrap-servers: 192.168.5.7:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+        max.request.size: 4194304
+
+

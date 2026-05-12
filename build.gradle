@@ -1,0 +1,32 @@
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+
+plugins {
+    id "org.springframework.boot" apply false
+    id "io.spring.dependency-management" apply false
+}
+
+allprojects {
+    group = findProperty("group") ?: "com.mpole.hana"
+    version = findProperty("version") ?: "0.0.1-SNAPSHOT"
+}
+
+subprojects {
+    pluginManager.withPlugin("java") {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+        }
+
+        dependencies {
+            implementation "org.springframework.kafka:spring-kafka" // 카프카 기본 설정 (공통)
+
+            compileOnly "org.projectlombok:lombok"
+            annotationProcessor "org.projectlombok:lombok"
+        }
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}

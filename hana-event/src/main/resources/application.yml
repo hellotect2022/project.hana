@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: hana-event
+
+server:
+  port: 8081
