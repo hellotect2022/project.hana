@@ -1,43 +1,46 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: hana-gateway
+  main:
+    web-application-type: none # 웹서비스 없이 시작함
+  kafka:
+    bootstrap-servers: 192.168.5.4:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        compression.type: lz4  # 여기에 추가
+        spring.json.add.type.headers: false
+        max.request.size: 10485760  # 10MB로 증설
 
 storage:
   mssql:
-    driver: "sqlserver"
-    host: 192.168.250.180
-    port: 1433
-    user: sa
-    password: "!Q2w3e4r"
-    database: SI_HANAHQ_T
-
-  postgres:
+    #    driver: "sqlserver"
+    #    host: 192.168.250.180
+    #    port: 1433
+    #    user: sa
+    #    password: "!Q2w3e4r"
+    #    database: SI_HANAHQ_T
     driver: "postgresql"
-    host: 192.168.250.181
+    host: 192.168.250.249
     port: 5432
     user: testuser
     password: "1q2w3e"
     database: hdt
     schema: core
 
-hana:
-  kafka:
-    topic:
-      raw: test
-
-server:
-  port: 8080
-
-  kafka:
-    bootstrap-servers: 192.168.5.7:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.add.type.headers: false
-        max.request.size: 4194304
-
-
+  postgres:
+    driver: "postgresql"
+    #host: 192.168.250.181
+    host: 192.168.250.249
+    port: 5432
+    user: testuser
+    password: "1q2w3e"
+    database: hdt
+    schema: core
 
 hdt:
   polling:

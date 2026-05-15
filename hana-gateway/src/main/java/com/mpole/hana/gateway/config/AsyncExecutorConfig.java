@@ -1,10 +1,12 @@
 package com.mpole.hana.gateway.config;
 
+import com.mpole.hana.gateway.config.properties.HdtPollingProperties;
 import com.mpole.hana.gateway.config.properties.ModbusIngestionProperties;
 import com.mpole.hana.gateway.config.properties.TcpIngestionProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.util.concurrent.Executor;
 
@@ -14,6 +16,7 @@ import java.util.concurrent.Executor;
 public class AsyncExecutorConfig {
     public static final String MODBUS_TASK_EXECUTOR = "modbusTaskExecutor";
     public static final String TCP_TASK_EXECUTOR = "tcpTaskExecutor";
+    public static final String DB_POLLING_SCHEDULER = "dbPollingScheduler";
 
     @Bean(name = MODBUS_TASK_EXECUTOR)
     ThreadPoolTaskExecutor modbusTaskExecutor(ModbusIngestionProperties props) {
@@ -43,6 +46,15 @@ public class AsyncExecutorConfig {
         return ex;
     }
 
+    @Bean(name = DB_POLLING_SCHEDULER)
+    ThreadPoolTaskScheduler dbPollingScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setThreadNamePrefix("db-poll-");
+        scheduler.setPoolSize(1);
+        scheduler.initialize();
+        return scheduler;
+    }
+
     /** Runnable 제출용으로는 Executor 타입만 노출해도 됨 */
     @Bean
     Executor modbusExecutor(ThreadPoolTaskExecutor modbusTaskExecutor) {
@@ -53,6 +65,9 @@ public class AsyncExecutorConfig {
     Executor tcpExecutor(ThreadPoolTaskExecutor tcpTaskExecutor) {
         return tcpTaskExecutor.getThreadPoolExecutor();
     }
+
+
+
 
     // 주입 예
 //    public SocketIngestionLifecycle(
