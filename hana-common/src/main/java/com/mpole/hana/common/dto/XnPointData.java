@@ -5,7 +5,7 @@ import lombok.Builder;
 import java.time.OffsetDateTime;
 
 @Builder(toBuilder = true)
-public record RawPointData(
+public record XnPointData(
         Long deviceId, // 우리쪽 DB 의 deviceId
         Long pointId,  // 우리쪽 DB 의 pointId
         String deviceCode,
