@@ -1,6 +1,7 @@
 package com.mpole.hana.event.init;
 
 import com.mpole.hana.common.dto.DeviceBundle;
+import com.mpole.hana.event.config.ReactiveEventQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.SmartLifecycle;
@@ -23,7 +24,8 @@ public class InitKafkaConsumer implements SmartLifecycle {
     private boolean isRunning = false;
 
     private final KafkaReceiver<String, Object> kafkaReceiver;
-    private final Sinks.Many<List<DeviceBundle>> centralSink;
+    //private final Sinks.Many<List<DeviceBundle>> centralSink;
+    private final ReactiveEventQueue reactiveEventQueue;
 
     AtomicLong lastReceiveTime = new AtomicLong(0);
 
@@ -80,7 +82,8 @@ public class InitKafkaConsumer implements SmartLifecycle {
             return;
         }
 
-        Sinks.EmitResult result = centralSink.tryEmitNext(bundles);
+        var result = reactiveEventQueue.emitDeviceBundle(bundles);
+        //Sinks.EmitResult result = centralSink.tryEmitNext(bundles);
 
         if (result.isFailure()) {
             log.warn("Event pipeline emit failed. result={}, size={}", result, bundles.size());

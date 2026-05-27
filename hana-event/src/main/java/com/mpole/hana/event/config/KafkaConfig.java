@@ -26,11 +26,11 @@ public class KafkaConfig {
 
     private final HdtKafkaTopicProperties hdtKafkaTopicProperties;
 
-    @Bean
-    public Sinks.Many<List<DeviceBundle>> centralSink() {
-        // 카프카로부터 수신한 데이타를 참조하는 공유 메모리
-        return Sinks.many().multicast().onBackpressureBuffer(20000);
-    }
+//    @Bean
+//    public Sinks.Many<List<DeviceBundle>> centralSink() {
+//        // 카프카로부터 수신한 데이타를 참조하는 공유 메모리
+//        return Sinks.many().multicast().onBackpressureBuffer(20000);
+//    }
 
     @Bean
     public KafkaSender<String, Object> reactiveKafkaSender() {

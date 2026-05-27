@@ -3,6 +3,7 @@ package com.mpole.hana.event.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpole.hana.common.dto.DeviceBundle;
+import com.mpole.hana.event.config.ReactiveEventQueue;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +24,20 @@ public class SnapshotService {
 
     private final DatabaseClient postgresDatabaseClient;
     private final ObjectMapper objectMapper;
-    private final Sinks.Many<List<DeviceBundle>> centralSink;
+    //private final Sinks.Many<List<DeviceBundle>> centralSink;
+    private final ReactiveEventQueue reactiveEventQueue;
 
     @PostConstruct
     public void startSnapshotPipeline() {
-        centralSink.asFlux().publishOn(Schedulers.newParallel("snapshot-thread"))
+        //centralSink.asFlux()
+        reactiveEventQueue.getDeviceRawFlux()
+                .publishOn(Schedulers.newParallel("snapshot-thread"))
                 .flatMap(bundles->{
                     log.info("snapshot 용으로 수신하는 flux 데이타 {}",bundles.size());
                     return upsertBulk(bundles);
                 })
-                .subscribe();
+                //.subscribe()
+        ;
     }
 
     public Mono<Void> upsertBulk(List<DeviceBundle> bundles) {

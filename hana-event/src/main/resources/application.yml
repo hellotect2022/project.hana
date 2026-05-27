@@ -4,8 +4,8 @@ server:
 storage:
   postgres:
     driver: "postgresql"
-    #host: 192.168.250.88
-    host: 192.168.250.249
+    host: 192.168.250.88
+    #host: 192.168.250.249
     port: 5432
     user: testuser
     password: "1q2w3e"
@@ -17,8 +17,8 @@ spring:
     name: hana-event
 
   kafka:
-    #bootstrap-servers: 192.168.5.4:9092
-    bootstrap-servers: 192.168.250.249:9092
+    bootstrap-servers: 192.168.5.4:9092
+    #bootstrap-servers: 192.168.250.249:9092
     consumer:
       max-poll-records: 10000
       group-id: hdt-event-server-group-2 # 아무 이름이나 지정 (공백 금지)
