@@ -5,6 +5,7 @@ plugins {
 
 dependencyManagement {
     imports {
+        //메인 프로젝트나 공통 라이브러리 프로젝트에서 버전을 생략 가능
         mavenBom "org.springframework.boot:spring-boot-dependencies:3.4.1"
     }
 }
@@ -12,6 +13,8 @@ dependencyManagement {
 dependencies {
     // @ConfigurationProperties 등 메타데이터 생성·IDE 자동완성용 (런타임 전이 없음)
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+    // 버전을 생략해도 spring-boot-dependencies가 3.4.1에 맞는 6.x 버전을 자동으로 찾아줍니다.
+    compileOnly 'jakarta.servlet:jakarta.servlet-api'
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 
     testImplementation platform("org.junit:junit-bom:5.11.4")
