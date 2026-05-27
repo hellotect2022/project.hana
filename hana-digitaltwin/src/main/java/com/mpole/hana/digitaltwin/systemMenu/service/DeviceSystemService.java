@@ -3,6 +3,7 @@ package com.mpole.hana.digitaltwin.systemMenu.service;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.iam.role.entity.Role;
+import com.mpole.hana.digitaltwin.iam.role.service.RoleService;
 import com.mpole.hana.digitaltwin.systemMenu.dto.*;
 import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSystem;
 import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSystemCategory;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 @Service
@@ -26,12 +28,24 @@ public class DeviceSystemService {
     private final DeviceCategoryRepository deviceCategoryRepository;
     private final RoleDeviceSystemRepository roleDeviceSystemRepository;
     private final EntityManager entityManager;
+    private final RoleService roleService;
 
     @Transactional(readOnly = true)
     public List<DeviceSystemResponse> getDeviceSystems() {
         return deviceSystemRepository.findAllWithCategories()
                 .stream()
                 .map(DeviceSystemResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DeviceSystemResponse> getDeviceSystemPermissionsByRoleName(Collection<String> roleNames) {
+        List<Role> roles = roleService.getRoleInfoByRoleName(roleNames);
+
+        List<Long> rolesIds = roles.stream().map(Role::getRoleId).toList();
+
+        return roleDeviceSystemRepository.findSystemsByRoleId(rolesIds)
+                .stream().map(DeviceSystemResponse::from)
                 .toList();
     }
 

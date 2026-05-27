@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.systemMenu.repository;
 
+import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSystem;
 import com.mpole.hana.digitaltwin.systemMenu.entity.RoleDeviceSystem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -22,4 +23,14 @@ public interface RoleDeviceSystemRepository extends JpaRepository<RoleDeviceSyst
             ORDER BY rds.deviceSystem.sortOrder ASC
             """)
     List<Long> findSystemIdsByRoleId(@Param("roleId") Long roleId);
+
+    @Query("""
+            SELECT 
+                ds
+            FROM RoleDeviceSystem rds
+            LEFT JOIN rds.deviceSystem ds
+            WHERE rds.role.roleId IN (:roleIds)
+            ORDER BY ds.sortOrder ASC
+            """)
+    List<DeviceSystem> findSystemsByRoleId(@Param("roleIds") List<Long> roleIds);
 }

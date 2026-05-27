@@ -33,4 +33,6 @@ public interface DeviceSystemRepository extends JpaRepository<DeviceSystem, Long
             WHERE ds.systemId = :systemId
             """)
     Optional<DeviceSystem> findByIdWithCategories(@Param("systemId") Long systemId);
+
+
 }

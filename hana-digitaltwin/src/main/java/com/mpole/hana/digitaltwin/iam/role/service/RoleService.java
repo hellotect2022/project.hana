@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.List;
 
 @Service
@@ -27,14 +28,20 @@ public class RoleService {
         return roleRepository.findRoleResponses();
     }
 
+    public List<Role> getRoleInfoByRoleName(Collection<String> roleNames) {
+        return roleRepository.findAllByRoleNameIn(roleNames);
+    }
+
     public List<RoleUserResponse> getUsersInRole(Long roleId) {
         ensureRoleExists(roleId);
         return roleRepository.findUsersInRole(roleId);
     }
+
     public List<RoleUserResponse> getUsersExceptRole(Long roleId, String search) {
         ensureRoleExists(roleId);
         return roleRepository.findUsersExceptRole(roleId, search);
     }
+
     @Transactional
     public RoleResponse createRole(RoleRequest request) {
         if (roleRepository.existsByRoleName(request.roleName())) {
