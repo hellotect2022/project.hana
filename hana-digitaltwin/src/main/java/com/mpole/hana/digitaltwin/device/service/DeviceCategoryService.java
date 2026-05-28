@@ -18,6 +18,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DeviceCategoryService {
     private final DeviceCategoryRepository deviceCategoryRepository;
+    private final DevicePointSchemaSyncService devicePointSchemaSyncService;
 
     @Transactional(readOnly = true)
     public List<DeviceCategoryResponse> getCategoryInfoTree() {
@@ -110,7 +111,15 @@ public class DeviceCategoryService {
     public DeviceCategoryResponse updateSchema(Long categoryId, List<PointSchemaDefinition> schema) {
         DeviceCategory category = deviceCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다. id=" + categoryId));
-        category.setSchemaDefinitions(schema != null ? schema : new ArrayList<>());
+
+        List<PointSchemaDefinition> oldSchema = category.getSchemaDefinitions() != null ?
+                new ArrayList<>(category.getSchemaDefinitions())
+                : new ArrayList<>();
+        List<PointSchemaDefinition> newSchema = schema != null ? schema : new ArrayList<>();
+
+        devicePointSchemaSyncService.syncForCategory(categoryId, oldSchema, newSchema);
+
+        category.setSchemaDefinitions(newSchema);
         return DeviceCategoryResponse.from(category);
     }
 }

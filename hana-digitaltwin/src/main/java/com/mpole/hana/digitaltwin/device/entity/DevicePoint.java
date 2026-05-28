@@ -12,7 +12,7 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "tbl_device_point",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_point_ref", columnNames = {"device_code", "device_point"}),
+                @UniqueConstraint(name = "uk_point_ref", columnNames = {"ref_device_code", "ref_point_code"}),
                 @UniqueConstraint(name = "uk_point_key", columnNames = {"point_key"}),
         }
 )
@@ -39,7 +39,7 @@ public class DevicePoint extends DateEntity {
     @Comment("SI view 테이블과 연계되는 device_code")
     private String refDeviceCode;
 
-    @Column(name="point_code")
+    @Column(name="ref_point_code")
     @Comment("SI view 테이블과 연계되는 point_code")
     private String refPointCode;
 

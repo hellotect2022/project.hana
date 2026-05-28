@@ -11,5 +11,14 @@ import java.util.List;
 
 @Repository
 public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
+
     boolean existsByPointKey(String pointKey);
+
+    boolean existsByPointKeyAndPointIdNot(String pointKey, Long pointId);
+
+    boolean existsByDevice_DeviceIdAndTagName(Long deviceId, String tagName);
+
+    java.util.Optional<DevicePoint> findByDevice_DeviceIdAndTagName(Long deviceId, String tagName);
+
+    void deleteByDevice_DeviceIdAndTagNameIn(Long deviceId, java.util.Collection<String> tagNames);
 }
