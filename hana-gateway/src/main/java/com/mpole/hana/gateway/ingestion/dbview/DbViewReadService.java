@@ -3,6 +3,7 @@ package com.mpole.hana.gateway.ingestion.dbview;
 import com.mpole.hana.common.dto.XnPointData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -16,7 +17,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DbViewReadService {
     private final DatabaseClient mssqlDatabaseClient;
@@ -24,6 +24,9 @@ public class DbViewReadService {
     private LocalDateTime lastUpdateTime = LocalDateTime.now();
     private final AtomicLong collectTime = new AtomicLong(0);
 
+    public DbViewReadService(@Qualifier("mssqlDatabaseClient")DatabaseClient mssqlDatabaseClient) {
+        this.mssqlDatabaseClient = mssqlDatabaseClient;
+    }
 
     public Flux<XnPointData> readFromViewTable() {
         // 마지막 시간에 대한 기록
@@ -33,13 +36,13 @@ public class DbViewReadService {
         return mssqlDatabaseClient.sql(
                     """
                         SELECT *
-                        -- FROM vwDigitalTwin_01 WITH (NOLOCK)
-                        FROM bms_point_view
-                        -- WHERE update_datetime > :lastTime
+                        FROM vwDigitalTwin_01 WITH (NOLOCK)
+                        -- FROM bms_point_view
+                        WHERE update_datetime > :lastTime
                         ORDER BY update_datetime ASC
                     """
                 )
-                //.bind("lastTime", lastUpdateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")))
+                .bind("lastTime", lastUpdateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")))
                 .fetch()
                 .all()
                 .collectList()
@@ -90,9 +93,8 @@ public class DbViewReadService {
                     OffsetDateTime latest = lastDataTimeInBatch.get();
                     if (latest != null) {
                         this.lastUpdateTime = latest.toLocalDateTime();
+                        log.info("0-3.수집 완료. 다음 조회 기준 시간: {}", latest.toLocalDateTime());
                     }
-                    assert latest != null;
-                    log.info("0-3.수집 완료. 다음 조회 기준 시간: {}", latest.toLocalDateTime());
                 })
                 .doOnError(e -> log.error("DB 조회 중 에러 발생: ", e));
     }

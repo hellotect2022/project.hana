@@ -30,7 +30,11 @@ public class InitDevicePointDataService implements SmartLifecycle {
     public Mono<Void> refreshCache() {
         return loadPoints().map(pointMetaData -> {
             Map<String, DeviceRawPointData> newPointMap = pointMetaData.stream()
-                    .collect(Collectors.toConcurrentMap(p->p.deviceCode()+":"+p.pointCode(), p -> p));
+                    .collect(Collectors.toConcurrentMap(
+                            p->p.deviceCode()+":"+p.pointCode(), // key mapper
+                            p -> p, // value mapper
+                            (existing, replacement) -> replacement
+                    ));
             this.pointMap.clear();
             this.pointMap.putAll(newPointMap);
             return Mono.empty();
@@ -55,7 +59,7 @@ public class InitDevicePointDataService implements SmartLifecycle {
 //                    WHERE mapped_device_id IS NOT NULL
 //                    """)
 //                .map((row, meta) -> {
-//                    return PointMetaData.builder()
+//                    return DeviceRawPointData.builder()
 //                            .pointId(row.get("raw_point_id", Long.class))
 //                            .deviceId(row.get("mapped_device_id", Long.class))
 //                            .deviceCode(row.get("device_code", String.class))
@@ -72,8 +76,9 @@ public class InitDevicePointDataService implements SmartLifecycle {
                     SELECT
                         point_id,
                         device_id,
-                        device_code,
-                        point_code
+                        ref_device_code,
+                        ref_point_code,
+                        tag_name
                     FROM tbl_device_point
                     """)
                 .map((row, meta) -> {
@@ -83,8 +88,9 @@ public class InitDevicePointDataService implements SmartLifecycle {
                     return DeviceRawPointData.builder()
                             .pointId(row.get("point_id", Long.class))
                             .deviceId(row.get("device_id", Long.class))
-                            .deviceCode(row.get("device_code", String.class))
-                            .pointCode(row.get("point_code", String.class))
+                            .deviceCode(row.get("ref_device_code", String.class))
+                            .pointCode(row.get("ref_point_code", String.class))
+                            .schemaTagName(row.get("tag_name", String.class))
                             .build();
                 })
                 .all()

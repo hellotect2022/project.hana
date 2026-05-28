@@ -23,7 +23,7 @@ public class DbViewBundleService {
         return rawDataStream
                 .collectList()
                 .flatMapMany(allData -> {
-
+                    long start = System.currentTimeMillis();
                     Map<Long, List<XnPointData>> grouped = allData
                             .parallelStream()
                             .<XnPointData>mapMulti((raw, consumer) -> {
@@ -38,7 +38,21 @@ public class DbViewBundleService {
                             })
                             .collect(Collectors.groupingBy(XnPointData::deviceId));
 
-                    var result = grouped.entrySet().stream().map(entry -> {
+//
+
+//                    var result = grouped.entrySet().stream().map(entry -> {
+//                        List<XnPointData> points = entry.getValue();
+//                        points.sort(Comparator.comparing(XnPointData::updateDatetime).reversed());
+//
+//                        return DeviceBundle.builder()
+//                                .deviceId(entry.getKey())
+//                                .timestamp(points.getFirst().updateDatetime())
+//                                .points(points)
+//                                .build();
+//                    }).toList();
+
+                    log.info(" - 순수 번들링 가공 소요 시간: {}ms", System.currentTimeMillis() - start);
+                    return Flux.fromIterable(grouped.entrySet()).map(entry -> {
                         List<XnPointData> points = entry.getValue();
                         points.sort(Comparator.comparing(XnPointData::updateDatetime).reversed());
 
@@ -47,9 +61,7 @@ public class DbViewBundleService {
                                 .timestamp(points.getFirst().updateDatetime())
                                 .points(points)
                                 .build();
-                    }).toList();
-
-                    return Flux.fromIterable(result);
+                    });
                 });
     }
 }
