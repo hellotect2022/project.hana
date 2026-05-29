@@ -1,0 +1,73 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: hana-gateway
+  main:
+    web-application-type: none # 웹서비스 없이 시작함
+  kafka:
+    bootstrap-servers: 192.168.250.249:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      #value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        #buffer.memory: 7108864
+        buffer.memory: 67108864  # 64MB로 증설 (기본 32MB는 너무 작음)
+        compression.type: lz4  # 여기에 추가
+        spring.json.add.type.headers: false
+        #max.request.size: 10485760  # 10MB로 증설
+        max.request.size: 31457280
+
+storage:
+  mssql:
+    driver: "sqlserver"
+    host: 192.168.250.180
+    port: 1433
+    user: sa
+    password: "!Q2w3e4r"
+    database: SI_HANAHQ_T
+#    driver: "postgresql"
+#    host: 192.168.250.249
+#    port: 5432
+#    user: testuser
+#    password: "1q2w3e"
+#    database: hdt
+#    schema: core
+
+  postgres:
+    driver: "postgresql"
+    host: 192.168.250.181
+    #host: 192.168.250.249
+    port: 5432
+    user: testuser
+    password: "1q2w3e"
+    database: hdt
+    schema: core
+
+hdt:
+  polling:
+    enabled: true
+    fixed-delay-ms: 1000
+    pipeline-block-timeout: 5s
+
+  kafka:
+    topic:
+      raw: test2
+
+  ingestion:
+    tcp:
+      enabled: false
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 0
+      endpoints: []
+
+    modbus:
+      enabled: false
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 0

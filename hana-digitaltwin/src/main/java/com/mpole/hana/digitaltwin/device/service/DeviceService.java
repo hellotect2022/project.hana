@@ -14,7 +14,6 @@ import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.unityAsset.service.UnityAssetService;
-import com.mpole.hana.digitaltwin.realtime.api.DeviceRealtimeController;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
