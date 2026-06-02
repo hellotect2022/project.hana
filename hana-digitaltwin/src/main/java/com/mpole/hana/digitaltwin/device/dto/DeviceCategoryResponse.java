@@ -14,6 +14,7 @@ public record DeviceCategoryResponse(
         Integer depth,
         String categoryCode,
         String categoryName,
+        String categoryNameEn,
         String description,
         Integer displayOrder,
         Boolean active,
@@ -29,6 +30,7 @@ public record DeviceCategoryResponse(
                 .parentId(entity.getParent() != null ? entity.getParent().getCategoryId() : null)
                 .depth(entity.getDepth())
                 .categoryName(entity.getCategoryName())
+                .categoryNameEn(entity.getCategoryNameEn())
                 .categoryCode(entity.getCategoryCode())
                 .description(entity.getDescription())
                 .displayOrder(entity.getDisplayOrder())

@@ -17,4 +17,6 @@ public interface DeviceCategoryRepository extends JpaRepository<DeviceCategory,L
     List<DeviceCategory> findAllWithParent();
 
     boolean existsByParent(DeviceCategory parent);
+
+    boolean existsByCategoryCodeAndDepth(String categoryCode, Integer depth);
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -59,6 +60,8 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
     long countByUnityAsset_AssetId(Long assetId);
 
     boolean existsByDeviceKey(String deviceKey);
+
+    List<Device> findByCategory_CategoryIdIn(Collection<Long> categoryIds);
 
 //    @Query("""
 //            SELECT d FROM Device d

@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "tbl_device_category")
+@Table(name = "tbl_device_category", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_category_code_depth", columnNames = {"category_code", "depth"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,6 +43,10 @@ public class DeviceCategory extends DateEntity {
 
     @Column(name="category_name",nullable = false, length = 200)
     private String categoryName;
+
+    @Column(name = "category_name_en", length = 200)
+    @Comment("카테고리 영문 표시명 (선택)")
+    private String categoryNameEn;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "property_type", length = 32)

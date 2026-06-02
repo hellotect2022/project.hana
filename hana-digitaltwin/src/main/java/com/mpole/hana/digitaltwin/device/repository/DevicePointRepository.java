@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -20,5 +21,9 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
 
     java.util.Optional<DevicePoint> findByDevice_DeviceIdAndTagName(Long deviceId, String tagName);
 
-    void deleteByDevice_DeviceIdAndTagNameIn(Long deviceId, java.util.Collection<String> tagNames);
+    void deleteByDevice_DeviceIdAndTagNameIn(Long deviceId, Collection<String> tagNames);
+
+    List<DevicePoint> findAllByDevice_DeviceId(Long deviceId);
+
+    void deleteByDevice_DeviceIdIn(Collection<Long> deviceIds);
 }

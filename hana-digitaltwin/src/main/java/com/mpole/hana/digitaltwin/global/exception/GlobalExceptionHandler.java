@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.global.exception;
 
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
@@ -74,6 +75,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> noResourceFoundException(NoResourceFoundException e) {
         log.error("요청하신 API 경로를 찾을 수 없습니다. {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("요청하신 API 경로를 찾을 수 없습니다. "+e.getMessage(), "NOT_FOUND"));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> constraintViolationException(ConstraintViolationException e) {
+        log.error("제약 조건을 위반함 {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("요청하신 API 경로를 찾을 수 없습니다. "+e.getMessage(), "NOT_FOUND"));
