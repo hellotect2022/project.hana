@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -31,6 +32,10 @@ public interface DeviceCctvMappingRepository extends JpaRepository<DeviceCctvMap
     @Modifying
     @Query("DELETE FROM DeviceCctvMapping m WHERE m.device.deviceId = :deviceId")
     void deleteByDeviceId(@Param("deviceId") Long deviceId);
+
+    @Modifying
+    @Query("DELETE FROM DeviceCctvMapping m WHERE m.device.deviceId IN :deviceIds")
+    void deleteByDeviceIdIn(@Param("deviceIds") Collection<Long> deviceIds);
 
     @Modifying
     @Query(value = """

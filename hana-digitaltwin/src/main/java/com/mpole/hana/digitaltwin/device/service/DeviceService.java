@@ -1,7 +1,11 @@
 package com.mpole.hana.digitaltwin.device.service;
 
 import com.mpole.hana.digitaltwin.device.dto.CctvInfoProjection;
+import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingItemResponse;
+import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingPageResponse;
+import com.mpole.hana.digitaltwin.device.dto.DevicePointRefMappingRequest;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointRegisterItem;
+import com.mpole.hana.digitaltwin.device.dto.DevicePointResponse;
 import com.mpole.hana.digitaltwin.device.dto.DeviceResponse;
 import com.mpole.hana.digitaltwin.device.dto.DeviceUpdateRequest;
 import com.mpole.hana.digitaltwin.device.entity.Device;
@@ -16,10 +20,16 @@ import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.unityAsset.service.UnityAssetService;
 import com.mpole.hana.digitaltwin.realtime.api.DeviceRealtimeController;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -129,9 +139,133 @@ public class DeviceService {
     }
 
     @Transactional(readOnly = true)
+    public Page<DeviceResponse> getDevicesPage(String keyword, Pageable pageable) {
+        String kw = normalizeKeyword(keyword);
+        return deviceRepository.searchDevices(kw, pageable)
+                .map(DeviceResponse::from);
+    }
+
+    @Transactional(readOnly = true)
     public DeviceResponse getTargetDevice(Long deviceId) {
         Device device = deviceRepository.fetchDeviceById(deviceId);
         return DeviceResponse.from(device);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DevicePointResponse> getDevicePoints(Long deviceId) {
+        if (!deviceRepository.existsById(deviceId)) {
+            throw new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId);
+        }
+        return devicePointRepository.findAllByDevice_DeviceIdOrderByTagNameAsc(deviceId).stream()
+                .map(DevicePointResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DevicePointMappingItemResponse> getDevicePointsForMapping(Long deviceId, String keyword) {
+        String kw = normalizeKeyword(keyword);
+        return devicePointRepository.findForRefMapping(deviceId, kw).stream()
+                .map(DevicePointMappingItemResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public DevicePointMappingPageResponse getDevicePointsForMappingPage(
+            Long deviceId,
+            String keyword,
+            Pageable pageable
+    ) {
+        String kw = normalizeKeyword(keyword);
+        Page<DevicePointMappingItemResponse> page = devicePointRepository
+                .findForRefMappingPage(deviceId, kw, pageable)
+                .map(DevicePointMappingItemResponse::from);
+        long mappedCount = devicePointRepository.countMappedForRefMapping(deviceId, kw);
+        return DevicePointMappingPageResponse.of(page, mappedCount);
+    }
+
+    private static String normalizeKeyword(String keyword) {
+        return keyword != null && !keyword.isBlank() ? keyword.trim() : null;
+    }
+
+    @Transactional
+    public void updateDevicePointRefMappings(List<DevicePointRefMappingRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        for (DevicePointRefMappingRequest request : requests) {
+            DevicePoint point = devicePointRepository.findById(request.pointId())
+                    .orElseThrow(() -> new RuntimeException("포인트를 찾을 수 없습니다. id=" + request.pointId()));
+
+            String refDeviceCode = trimToNull(request.refDeviceCode());
+            String refPointCode = trimToNull(request.refPointCode());
+
+            if (refDeviceCode != null ^ refPointCode != null) {
+                throw new IllegalArgumentException(
+                        "ref_device_code와 ref_point_code는 함께 입력하거나 모두 비워야 합니다. pointId=" + request.pointId()
+                );
+            }
+
+            if (refDeviceCode != null) {
+                boolean duplicate = devicePointRepository
+                        .findByRefDeviceCodeAndRefPointCodeAndPointIdNot(refDeviceCode, refPointCode, point.getPointId())
+                        .isPresent();
+                if (duplicate) {
+                    throw new IllegalStateException(
+                            "이미 다른 포인트에 연결된 SI 매핑입니다: " + refDeviceCode + ":" + refPointCode
+                    );
+                }
+            }
+
+            point.setRefDeviceCode(refDeviceCode);
+            point.setRefPointCode(refPointCode);
+        }
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    @Transactional
+    public void saveTagMappingsByDevice(Long deviceId, Map<String, String> mappings) {
+        if (!deviceRepository.existsById(deviceId)) {
+            throw new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId);
+        }
+        if (mappings == null || mappings.isEmpty()) {
+            return;
+        }
+
+        Map<String, DevicePoint> byTag = devicePointRepository
+                .findAllByDevice_DeviceIdOrderByTagNameAsc(deviceId)
+                .stream()
+                .collect(Collectors.toMap(DevicePoint::getTagName, Function.identity(), (a, b) -> a));
+
+        List<DevicePointRefMappingRequest> updates = new ArrayList<>();
+        for (Map.Entry<String, String> entry : mappings.entrySet()) {
+            DevicePoint point = byTag.get(entry.getKey());
+            if (point == null) {
+                continue;
+            }
+            String raw = entry.getValue();
+            String refDeviceCode = null;
+            String refPointCode = null;
+            if (raw != null && !raw.isBlank()) {
+                String val = raw.trim();
+                int colon = val.indexOf(':');
+                if (colon <= 0 || colon >= val.length() - 1) {
+                    throw new IllegalArgumentException(
+                            "매핑 값 형식이 올바르지 않습니다 (deviceCode:pointCode): tagName=" + entry.getKey()
+                    );
+                }
+                refDeviceCode = val.substring(0, colon).trim();
+                refPointCode = val.substring(colon + 1).trim();
+            }
+            updates.add(new DevicePointRefMappingRequest(point.getPointId(), refDeviceCode, refPointCode));
+        }
+        updateDevicePointRefMappings(updates);
     }
 
     @Transactional(readOnly = true)
@@ -175,6 +309,12 @@ public class DeviceService {
             }
 
             device.setCategory(category);
+        }
+        if (request.assetId() != null) {
+            UnityAsset asset = unityAssetService.getAssetOrThrow(request.assetId());
+            device.setUnityAsset(asset);
+        } else {
+            device.setUnityAsset(null);
         }
         return DeviceResponse.from(deviceRepository.fetchDeviceById(deviceId));
     }

@@ -85,17 +85,21 @@ public class DeviceCategoryService {
         category.setCategoryName(request.categoryName());
         category.setCategoryNameEn(normalizeCategoryNameEn(request.categoryNameEn()));
         category.setCategoryCode(requireCategoryCode(request.categoryCode()));
+
         if (request.description() != null) {
             category.setDescription(request.description());
         }
+
         if (request.displayOrder() != null) {
             category.setDisplayOrder(request.displayOrder());
         }
+
         if (request.active() != null) {
             category.setEnabled(request.active());
         }
 
         deviceCategoryRepository.save(category);
+
         deviceCategoryCascadeService.syncDevicesAfterCategoryUpdate(categoryId, previousCategoryCode);
 
         return DeviceCategoryResponse.from(category);
@@ -111,7 +115,7 @@ public class DeviceCategoryService {
 
     @Transactional
     public DeviceCategoryResponse updateSchema(Long categoryId, List<PointSchemaDefinition> schema) {
-        DeviceCategory category = deviceCategoryRepository.findById(categoryId)
+        DeviceCategory category = deviceCategoryRepository.findWithParentJustThreeDepthById(categoryId)
                 .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다. id=" + categoryId));
 
         List<PointSchemaDefinition> oldSchema = category.getSchemaDefinitions() != null
@@ -121,7 +125,11 @@ public class DeviceCategoryService {
 
         devicePointSchemaSyncService.syncForCategory(categoryId, oldSchema, newSchema);
 
-        category.setSchemaDefinitions(newSchema);
+
+        // 2. 주소값을 갈아끼우지 않고 내부 값만 dirty checking 하도록 유도
+        category.setSchemaDefinitions(schema);
+        deviceCategoryRepository.saveAndFlush(category);
+
         return DeviceCategoryResponse.from(category);
     }
 

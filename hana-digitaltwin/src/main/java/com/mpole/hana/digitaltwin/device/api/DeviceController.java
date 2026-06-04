@@ -11,6 +11,10 @@ import com.mpole.hana.digitaltwin.location.service.LocationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -63,8 +67,11 @@ public class DeviceController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<ApiResponse<List<DeviceResponse>>> getAllDevices() {
-        List<DeviceResponse> devices = deviceService.getAllDevices();
+    public ResponseEntity<ApiResponse<Page<DeviceResponse>>> getAllDevices(
+            @RequestParam(required = false) String keyword,
+            @PageableDefault(size = 20, sort = "deviceId", direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success("장비 목록 조회", devices));
     }
 
@@ -72,6 +79,32 @@ public class DeviceController {
     public ResponseEntity<ApiResponse<DeviceResponse>> getTargetDevice(@PathVariable Long deviceId) {
         DeviceResponse device = deviceService.getTargetDevice(deviceId);
         return ResponseEntity.ok(ApiResponse.success("장비 정보 조회", device));
+    }
+
+    @GetMapping("/{deviceId}/points")
+    public ResponseEntity<ApiResponse<List<DevicePointResponse>>> getDevicePoints(
+            @PathVariable Long deviceId
+    ) {
+        List<DevicePointResponse> points = deviceService.getDevicePoints(deviceId);
+        return ResponseEntity.ok(ApiResponse.success("장비 포인트 목록", points));
+    }
+
+    @GetMapping("/points/mapping")
+    public ResponseEntity<ApiResponse<DevicePointMappingPageResponse>> getDevicePointsForMapping(
+            @RequestParam(required = false) Long deviceId,
+            @RequestParam(required = false) String keyword,
+            @PageableDefault(size = 50, sort = {"device.deviceName", "tagName"}, direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        DevicePointMappingPageResponse result = deviceService.getDevicePointsForMappingPage(deviceId, keyword, pageable);
+        return ResponseEntity.ok(ApiResponse.success("포인트 매핑 목록", result));
+    }
+
+    @PutMapping("/points/ref-mapping")
+    public ResponseEntity<ApiResponse<Void>> updateDevicePointRefMappings(
+            @Valid @RequestBody List<DevicePointRefMappingRequest> requests
+    ) {
+        deviceService.updateDevicePointRefMappings(requests);
+        return ResponseEntity.ok(ApiResponse.success("포인트 SI 매핑 저장"));
     }
 
     @PatchMapping("/{deviceId}")
@@ -177,7 +210,9 @@ public class DeviceController {
     @PutMapping("/{deviceId}/points/tag-mapping")
     public ResponseEntity<ApiResponse<Void>> saveTagMapping(
             @PathVariable Long deviceId,
-            @RequestBody Map<String, String> mappings) {
+            @RequestBody Map<String, String> mappings
+    ) {
+        deviceService.saveTagMappingsByDevice(deviceId, mappings);
         return ResponseEntity.ok(ApiResponse.success("tagName 매핑 저장"));
     }
 
