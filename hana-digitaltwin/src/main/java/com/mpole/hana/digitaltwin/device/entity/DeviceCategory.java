@@ -13,9 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "tbl_device_category", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_category_code_depth", columnNames = {"category_code", "depth"})
-})
+@Table(name = "tbl_device_category"
+        //uniqueConstraints = {@UniqueConstraint(name = "uk_category_code_depth", columnNames = {"category_code", "depth"})}
+)
 @Getter
 @Setter
 @NoArgsConstructor
