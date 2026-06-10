@@ -48,6 +48,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
                 OR LOWER(COALESCE(d.deviceKey, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR LOWER(COALESCE(c.categoryName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR CONCAT('', d.deviceId) LIKE CONCAT('%', :keyword, '%'))
+              AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
             """,
             countQuery = """
             SELECT COUNT(DISTINCT d) FROM Device d
@@ -57,9 +58,14 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
                 OR LOWER(COALESCE(d.deviceKey, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR LOWER(COALESCE(c.categoryName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR CONCAT('', d.deviceId) LIKE CONCAT('%', :keyword, '%'))
+              AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
             """
     )
-    Page<Device> searchDevices(@Param("keyword") String keyword, Pageable pageable);
+    Page<Device> searchDevices(
+            @Param("keyword") String keyword,
+            @Param("categoryIds") Collection<Long> categoryIds,
+            Pageable pageable
+    );
 
     @Query("""
         SELECT d FROM Device d
@@ -88,6 +94,8 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
     long countByUnityAsset_AssetId(Long assetId);
 
     boolean existsByDeviceKey(String deviceKey);
+
+    boolean existsByDeviceKeyAndDeviceIdNot(String deviceKey, Long deviceId);
 
     List<Device> findByCategory_CategoryIdIn(Collection<Long> categoryIds);
 

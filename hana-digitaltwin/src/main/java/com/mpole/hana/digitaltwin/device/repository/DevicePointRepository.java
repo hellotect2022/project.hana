@@ -98,6 +98,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             JOIN FETCH p.device d
             LEFT JOIN FETCH d.category
             WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
+              AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -112,6 +113,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             SELECT COUNT(DISTINCT p) FROM DevicePoint p
             JOIN p.device d
             WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
+              AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -125,6 +127,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
     )
     Page<DevicePoint> findForRefMappingPage(
             @Param("deviceId") Long deviceId,
+            @Param("categoryIds") Collection<Long> categoryIds,
             @Param("keyword") String keyword,
             Pageable pageable
     );
@@ -133,6 +136,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             SELECT COUNT(DISTINCT p) FROM DevicePoint p
             JOIN p.device d
             WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
+              AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -147,6 +151,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             """)
     long countMappedForRefMapping(
             @Param("deviceId") Long deviceId,
+            @Param("categoryIds") Collection<Long> categoryIds,
             @Param("keyword") String keyword
     );
 

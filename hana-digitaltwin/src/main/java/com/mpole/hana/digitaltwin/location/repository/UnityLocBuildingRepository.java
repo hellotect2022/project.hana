@@ -10,11 +10,16 @@ import java.util.List;
 @Repository
 public interface UnityLocBuildingRepository extends JpaRepository<UnityLocBuilding,Long> {
 
+//    @Query("""
+//            SELECT b FROM UnityLocBuilding b
+//            LEFT JOIN FETCH b.floors f
+//            LEFT JOIN FETCH f.zones z
+//            ORDER BY b.buildingId ASC, f.floorId ASC, z.zoneId ASC
+//            """)
     @Query("""
-            SELECT b FROM UnityLocBuilding b
-            LEFT JOIN FETCH b.floors f
-            LEFT JOIN FETCH f.zones z
-            ORDER BY b.buildingId ASC, f.floorId ASC, z.zoneId ASC
-            """)
+        SELECT b FROM UnityLocBuilding b
+        LEFT JOIN FETCH b.floors f
+        ORDER BY b.buildingId ASC, f.floorId ASC
+        """)
     List<UnityLocBuilding> fetchAllWithFloorsAndZones();
 }

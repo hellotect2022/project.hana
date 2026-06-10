@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -39,6 +40,7 @@ public class DeviceService {
     private final DeviceCctvMappingRepository deviceCctvMappingRepository;
     private final DevicePointRepository devicePointRepository;
     private final UnityAssetService unityAssetService;
+    private final DeviceCategoryCascadeService deviceCategoryCascadeService;
 
     @Transactional
     public DeviceResponse saveDevice(DeviceUpdateRequest request) {
@@ -139,9 +141,13 @@ public class DeviceService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DeviceResponse> getDevicesPage(String keyword, Pageable pageable) {
+    public Page<DeviceResponse> getDevicesPage(String keyword, Long categoryId, Pageable pageable) {
         String kw = normalizeKeyword(keyword);
-        return deviceRepository.searchDevices(kw, pageable)
+        List<Long> categoryIds = deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(categoryId);
+        if (categoryIds != null && categoryIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        return deviceRepository.searchDevices(kw, categoryIds, pageable)
                 .map(DeviceResponse::from);
     }
 
@@ -172,14 +178,19 @@ public class DeviceService {
     @Transactional(readOnly = true)
     public DevicePointMappingPageResponse getDevicePointsForMappingPage(
             Long deviceId,
+            Long categoryId,
             String keyword,
             Pageable pageable
     ) {
         String kw = normalizeKeyword(keyword);
+        List<Long> categoryIds = deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(categoryId);
+        if (categoryIds != null && categoryIds.isEmpty()) {
+            return DevicePointMappingPageResponse.of(Page.empty(pageable), 0);
+        }
         Page<DevicePointMappingItemResponse> page = devicePointRepository
-                .findForRefMappingPage(deviceId, kw, pageable)
+                .findForRefMappingPage(deviceId, categoryIds, kw, pageable)
                 .map(DevicePointMappingItemResponse::from);
-        long mappedCount = devicePointRepository.countMappedForRefMapping(deviceId, kw);
+        long mappedCount = devicePointRepository.countMappedForRefMapping(deviceId, categoryIds, kw);
         return DevicePointMappingPageResponse.of(page, mappedCount);
     }
 
@@ -291,6 +302,10 @@ public class DeviceService {
     public DeviceResponse updateDevice(Long deviceId, DeviceUpdateRequest request) {
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId));
+
+        Long previousCategoryId = device.getCategory() != null ? device.getCategory().getCategoryId() : null;
+        String previousDeviceName = device.getDeviceName();
+
         if (request.deviceName() != null) {
             device.setDeviceName(request.deviceName());
         }
@@ -316,7 +331,24 @@ public class DeviceService {
         } else {
             device.setUnityAsset(null);
         }
+
+        boolean categoryChanged = request.categoryId() != null
+                && !Objects.equals(previousCategoryId, request.categoryId());
+        boolean nameChanged = request.deviceName() != null
+                && !Objects.equals(previousDeviceName, device.getDeviceName());
+
+        deviceRepository.save(device);
+
+        if ((categoryChanged || nameChanged) && device.getCategory() != null) {
+            deviceCategoryCascadeService.syncSingleDeviceKeys(deviceId);
+        }
+
         return DeviceResponse.from(deviceRepository.fetchDeviceById(deviceId));
+    }
+
+    @Transactional
+    public void deleteDevice(Long deviceId) {
+        deviceCategoryCascadeService.deleteSingleDevice(deviceId);
     }
 
 //    @Transactional(readOnly = true)

@@ -69,9 +69,10 @@ public class DeviceController {
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<DeviceResponse>>> getAllDevices(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId,
             @PageableDefault(size = 20, sort = "deviceId", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, pageable);
+        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, pageable);
         return ResponseEntity.ok(ApiResponse.success("장비 목록 조회", devices));
     }
 
@@ -92,10 +93,12 @@ public class DeviceController {
     @GetMapping("/points/mapping")
     public ResponseEntity<ApiResponse<DevicePointMappingPageResponse>> getDevicePointsForMapping(
             @RequestParam(required = false) Long deviceId,
+            @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String keyword,
             @PageableDefault(size = 50, sort = {"device.deviceName", "tagName"}, direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        DevicePointMappingPageResponse result = deviceService.getDevicePointsForMappingPage(deviceId, keyword, pageable);
+        DevicePointMappingPageResponse result = deviceService.getDevicePointsForMappingPage(
+                deviceId, categoryId, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success("포인트 매핑 목록", result));
     }
 
@@ -113,6 +116,12 @@ public class DeviceController {
             @RequestBody DeviceUpdateRequest request) {
         DeviceResponse updated = deviceService.updateDevice(deviceId, request);
         return ResponseEntity.ok(ApiResponse.success("장비 정보 수정", updated));
+    }
+
+    @DeleteMapping("/{deviceId}")
+    public ResponseEntity<ApiResponse<Void>> deleteDevice(@PathVariable Long deviceId) {
+        deviceService.deleteDevice(deviceId);
+        return ResponseEntity.ok(ApiResponse.success("장비 삭제"));
     }
 
     @GetMapping("/search")

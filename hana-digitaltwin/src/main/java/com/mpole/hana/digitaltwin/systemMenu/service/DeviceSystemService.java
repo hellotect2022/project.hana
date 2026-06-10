@@ -101,7 +101,13 @@ public class DeviceSystemService {
 
     @Transactional
     public void updateDeviceSystemPermissions(Long roleId, DeviceSystemPermissionRequest request) {
+        // 1. 먼저 삭제를 수행
         roleDeviceSystemRepository.deleteByRole_RoleId(roleId);
+
+        // 🔥 중요: 삭제 쿼리를 DB에 즉시 반영해서 유니크 제약조건 공간을 확보합니다.
+        entityManager.flush();
+
+
         Role role = entityManager.getReference(Role.class, roleId);
         List<RoleDeviceSystem> mappings = request.systemIds()
                 .stream()

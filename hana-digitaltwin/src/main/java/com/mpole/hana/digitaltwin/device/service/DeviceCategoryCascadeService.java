@@ -95,6 +95,91 @@ public class DeviceCategoryCascadeService {
     }
 
     /**
+     * 단일 장비 삭제 (이벤트 규칙·CCTV 매핑·포인트·배치 포함)
+     */
+    @Transactional
+    public void deleteSingleDevice(Long deviceId) {
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId));
+
+        eventRuleRepository.deleteByDeviceId(deviceId);
+        deviceCctvMappingRepository.deleteByDeviceId(deviceId);
+        device.clearPlacement();
+        devicePointRepository.deleteByDevice_DeviceIdIn(List.of(deviceId));
+        deviceRepository.delete(device);
+    }
+
+    /**
+     * 목록 필터용 — 선택 카테고리(대·중·소) 하위 소분류 ID 목록
+     * @return null이면 필터 없음, 빈 리스트면 매칭 없음
+     */
+    @Transactional(readOnly = true)
+    public List<Long> resolveSmallCategoryIdsForFilter(Long rootCategoryId) {
+        if (rootCategoryId == null) {
+            return null;
+        }
+        Map<Long, DeviceCategory> categoryById = loadCategoryMap();
+        if (!categoryById.containsKey(rootCategoryId)) {
+            return List.of();
+        }
+        Set<Long> subtreeIds = collectSubtreeCategoryIds(rootCategoryId, categoryById);
+        return collectSmallCategoryIds(subtreeIds, categoryById);
+    }
+
+    /**
+     * 장비 카테고리·이름 변경 후 device_key 및 연결 point_key 일괄 재생성
+     */
+    @Transactional
+    public void syncSingleDeviceKeys(Long deviceId) {
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId));
+        if (device.getCategory() == null) {
+            return;
+        }
+
+        DeviceCategory small = deviceCategoryRepository.findWithParentJustThreeDepthById(
+                        device.getCategory().getCategoryId())
+                .orElseThrow(() -> new IllegalStateException("device_key를 생성할 수 없습니다."));
+        DeviceCategory mid = small.getParent();
+        DeviceCategory major = mid != null ? mid.getParent() : null;
+
+        String newDeviceKey = DeviceKeyUtils.buildDeviceKey(major, mid, small, device.getDeviceName());
+        if (newDeviceKey.equals(device.getDeviceKey())) {
+            return;
+        }
+
+        if (deviceRepository.existsByDeviceKeyAndDeviceIdNot(newDeviceKey, deviceId)) {
+            throw new IllegalStateException("이미 사용 중인 device_key 입니다: " + newDeviceKey);
+        }
+
+        List<DevicePoint> points = devicePointRepository.findAllByDevice_DeviceId(deviceId);
+        for (DevicePoint point : points) {
+            String tagName = point.getTagName();
+            if (tagName == null || tagName.isBlank()) {
+                continue;
+            }
+            String newPointKey = DeviceKeyUtils.buildPointKey(newDeviceKey, tagName);
+            if (!newPointKey.equals(point.getPointKey())
+                    && devicePointRepository.existsByPointKeyAndPointIdNot(newPointKey, point.getPointId())) {
+                throw new IllegalStateException("이미 사용 중인 point_key 입니다: " + newPointKey);
+            }
+        }
+
+        device.setDeviceKey(newDeviceKey);
+        for (DevicePoint point : points) {
+            String tagName = point.getTagName();
+            if (tagName == null || tagName.isBlank()) {
+                continue;
+            }
+            point.setPointKey(DeviceKeyUtils.buildPointKey(newDeviceKey, tagName));
+        }
+        deviceRepository.save(device);
+        if (!points.isEmpty()) {
+            devicePointRepository.saveAll(points);
+        }
+    }
+
+    /**
      * 하위 카테고리를 depth 내림차순으로 삭제 (leaf → root)
      */
     @Transactional
