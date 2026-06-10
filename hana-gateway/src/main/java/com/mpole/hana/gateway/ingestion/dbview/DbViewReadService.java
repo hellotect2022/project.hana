@@ -36,7 +36,7 @@ public class DbViewReadService {
         return mssqlDatabaseClient.sql(
                     """
                         SELECT *
-                        FROM vwDigitalTwin_01 WITH (NOLOCK)
+                        FROM vwDigitalTwin_02 WITH (NOLOCK)
                         -- FROM bms_point_view
                         WHERE update_datetime > :lastTime
                         ORDER BY update_datetime ASC

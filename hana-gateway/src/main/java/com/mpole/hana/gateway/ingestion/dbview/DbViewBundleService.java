@@ -35,6 +35,8 @@ public class DbViewBundleService {
                                                     .deviceId(meta.deviceId())
                                                     .pointId(meta.pointId())
                                                     .tagName(meta.schemaTagName())
+                                                    .unit(meta.unit())
+                                                    .objectType(meta.pointType().name())
                                                     .build());
                                 }
                             })

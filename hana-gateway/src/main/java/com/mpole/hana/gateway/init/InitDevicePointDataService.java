@@ -1,6 +1,7 @@
 package com.mpole.hana.gateway.init;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mpole.hana.common.constant.PointType;
 import com.mpole.hana.common.dto.DeviceRawPointData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,7 +80,9 @@ public class InitDevicePointDataService implements SmartLifecycle {
                         device_id,
                         ref_device_code,
                         ref_point_code,
-                        tag_name
+                        tag_name,
+                        point_type,
+                        unit
                     FROM tbl_device_point
                     """)
                 .map((row, meta) -> {
@@ -93,6 +96,8 @@ public class InitDevicePointDataService implements SmartLifecycle {
                             .deviceCode(row.get("ref_device_code", String.class))
                             .pointCode(row.get("ref_point_code", String.class))
                             .schemaTagName(row.get("tag_name", String.class))
+                            .unit(row.get("unit", String.class))
+                            .pointType(PointType.valueOf(row.get("point_type", String.class)))
                             .build();
                 })
                 .all()

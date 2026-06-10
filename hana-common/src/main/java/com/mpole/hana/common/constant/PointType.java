@@ -17,5 +17,8 @@ public enum PointType {
     // Multi-State 정수 (Integer/Enum)
     MSI, // 현재 모드
     MSO, // 모드 변경
-    MSV  // 상태 설정값
+    MSV,  // 상태 설정값
+
+    // 직접 계산해야하는값
+    FUNCTION
 }
