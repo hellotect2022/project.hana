@@ -36,7 +36,7 @@ public class SnapshotService {
                     log.info("snapshot 용으로 수신하는 flux 데이타 {}",bundles.size());
                     return upsertBulk(bundles);
                 })
-                //.subscribe()
+                .subscribe()
         ;
     }
 
@@ -62,7 +62,8 @@ public class SnapshotService {
                         throw new RuntimeException(e);
                     }
                     // PostgreSQL에서 싱글 쿼테이션(')은 두 번 쓰기('')로 이스케이프 처리
-                    return String.format("(%d, '%s', '%s', '%s'::jsonb)",
+                    return String.format("('%s', %d, '%s', '%s', '%s'::jsonb)",
+                            bundle.deviceKey(),
                             bundle.deviceId(),
                             bundle.timestamp(), // OffsetDateTime은 포맷에 맞게 문자열화
                             bundle.timestamp(),
@@ -74,7 +75,7 @@ public class SnapshotService {
 
         // 2. 전체 Bulk Upsert 쿼리 생성
         String sql = String.format("""
-            INSERT INTO tbl_device_snapshot_last (device_id, created_at, updated_at, points)
+            INSERT INTO tbl_device_snapshot_last (device_key, device_id, created_at, updated_at, points)
             VALUES %s
             ON CONFLICT (device_id)
             DO UPDATE SET

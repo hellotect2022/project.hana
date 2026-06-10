@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 public record XnPointData(
         Long deviceId, // 우리쪽 DB 의 deviceId
         Long pointId,  // 우리쪽 DB 의 pointId
+        String pointkey, // 우리쪽 DB 의 pointKey
         String deviceCode,
         String pointCode,
         String alarmYn,

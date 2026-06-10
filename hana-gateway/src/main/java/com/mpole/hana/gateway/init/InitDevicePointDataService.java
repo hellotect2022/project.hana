@@ -74,6 +74,7 @@ public class InitDevicePointDataService implements SmartLifecycle {
         return postgresDatabaseClient
                 .sql("""
                     SELECT
+                        point_key,
                         point_id,
                         device_id,
                         ref_device_code,
@@ -86,6 +87,7 @@ public class InitDevicePointDataService implements SmartLifecycle {
 
 
                     return DeviceRawPointData.builder()
+                            .pointKey(row.get("point_key",String.class))
                             .pointId(row.get("point_id", Long.class))
                             .deviceId(row.get("device_id", Long.class))
                             .deviceCode(row.get("ref_device_code", String.class))

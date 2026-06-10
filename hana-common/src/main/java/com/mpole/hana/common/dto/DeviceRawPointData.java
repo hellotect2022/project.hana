@@ -5,6 +5,7 @@ import lombok.Builder;
 
 @Builder
 public record DeviceRawPointData(
+        String pointKey,
         Long pointId,
         Long deviceId,
         String deviceCode,

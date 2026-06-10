@@ -29,11 +29,13 @@ public class DbViewBundleService {
                             .<XnPointData>mapMulti((raw, consumer) -> {
                                 var meta = initDevicePointDataService.getPoint(raw.deviceCode() + ":" + raw.pointCode());
                                 if (meta != null) {
-                                    consumer.accept(raw.toBuilder()
-                                            .deviceId(meta.deviceId())
-                                            .pointId(meta.pointId())
-                                            .tagName(meta.schemaTagName())
-                                            .build());
+                                    consumer.accept(
+                                            raw.toBuilder()
+                                                    .pointkey(meta.pointKey())
+                                                    .deviceId(meta.deviceId())
+                                                    .pointId(meta.pointId())
+                                                    .tagName(meta.schemaTagName())
+                                                    .build());
                                 }
                             })
                             .collect(Collectors.groupingBy(XnPointData::deviceId));
@@ -55,13 +57,33 @@ public class DbViewBundleService {
                     return Flux.fromIterable(grouped.entrySet()).map(entry -> {
                         List<XnPointData> points = entry.getValue();
                         points.sort(Comparator.comparing(XnPointData::updateDatetime).reversed());
-
+                        String pk = points.getFirst().pointkey();
+                        String deviceKey = cutByUnderscore(pk,4);
                         return DeviceBundle.builder()
+                                .deviceKey(deviceKey)
                                 .deviceId(entry.getKey())
                                 .timestamp(points.getFirst().updateDatetime())
                                 .points(points)
                                 .build();
                     });
                 });
+    }
+
+    public static String cutByUnderscore(String value, int underscoreCount) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+
+        int pos = -1;
+
+        for (int i = 0; i < underscoreCount; i++) {
+            pos = value.indexOf('_', pos + 1);
+
+            if (pos == -1) {
+                return value;
+            }
+        }
+
+        return value.substring(0, pos);
     }
 }

@@ -8,6 +8,7 @@ import java.util.List;
 @Builder
 public record DeviceBundle(
         Long deviceId,
+        String deviceKey,
         OffsetDateTime timestamp,
         List<XnPointData> points
 ) {
