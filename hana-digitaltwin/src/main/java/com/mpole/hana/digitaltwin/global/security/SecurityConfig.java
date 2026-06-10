@@ -42,6 +42,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/device-system/roles/**").authenticated()
                         .requestMatchers(
                                 "/api/**",
                                 "/actuator/**",

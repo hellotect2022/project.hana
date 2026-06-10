@@ -1,6 +1,5 @@
 package com.mpole.hana.digitaltwin.realtime.dto;
 
-import com.mpole.hana.digitaltwin.realtime.entity.DeviceSnapshotLast;
 import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;

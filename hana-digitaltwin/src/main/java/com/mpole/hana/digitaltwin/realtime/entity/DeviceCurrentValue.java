@@ -13,13 +13,13 @@ import org.hibernate.type.SqlTypes;
 import java.util.List;
 
 @Entity
-@Table(name = "tbl_device_snapshot_last")
+@Table(name = "tbl_device_current_value")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DeviceSnapshotLast extends DateEntity {
+public class DeviceCurrentValue extends DateEntity {
     @Id
     @Column(name = "device_id")
     private Long deviceId;
