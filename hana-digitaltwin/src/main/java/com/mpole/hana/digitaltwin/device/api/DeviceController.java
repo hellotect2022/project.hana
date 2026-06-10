@@ -26,8 +26,6 @@ import java.util.Map;
 @RequestMapping("/api/device")
 @RequiredArgsConstructor
 public class DeviceController {
-//    private final MssqlRepository mssqlRepository;
-//    private final XnSolutionService xnSolutionService;
 
     private final DeviceService deviceService;
     private final DeviceCategoryService deviceCategoryService;
@@ -46,20 +44,6 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success(message, created));
     }
 
-//    @GetMapping
-//    public ResponseEntity<List<ExternalMSViewEntity>> getViewTableDevices() {
-//        log.info("view 테이블 장비 조회");
-//        List<ExternalMSViewEntity> list = mssqlRepository.findAll();
-//        return ResponseEntity.ok(list);
-//    }
-//
-//    @GetMapping("/sync")
-//    public ResponseEntity<String> syncDevice() {
-//        log.info("장비 동기화 시작");
-//        xnSolutionService.syncInBatches();
-//        return ResponseEntity.ok("동기화가 완료되었습니다.");
-//    }
-
     @GetMapping("/cnt-all")
     public ResponseEntity<ApiResponse<Long>> getAllDevicesCnt() {
         Long cnt = deviceService.getAllDevicesCnt();
@@ -75,6 +59,15 @@ public class DeviceController {
         Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, pageable);
         return ResponseEntity.ok(ApiResponse.success("장비 목록 조회", devices));
     }
+//    @GetMapping("/all")
+//    public ResponseEntity<ApiResponse<List<DeviceResponse>>> getAllDevices(
+//            @RequestParam(required = false) String keyword,
+//            @RequestParam(required = false) Long categoryId,
+//            @PageableDefault(size = 20, sort = "deviceId", direction = Sort.Direction.ASC) Pageable pageable
+//    ) {
+//        List<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, pageable).stream().toList();
+//        return ResponseEntity.ok(ApiResponse.success("장비 목록 조회", devices));
+//    }
 
     @GetMapping("/{deviceId}")
     public ResponseEntity<ApiResponse<DeviceResponse>> getTargetDevice(@PathVariable Long deviceId) {
@@ -132,59 +125,7 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("층, 구역 별 장비 목록 조회", devices));
     }
 
-    @GetMapping("/device-categories")
-    public ResponseEntity<ApiResponse<List<DeviceCategoryResponse>>> getCategoryInfos() {
-        List<DeviceCategoryResponse> response = deviceCategoryService.getCategoryInfoTree();
-        return
-                ResponseEntity.ok(ApiResponse.success("장비 카테고리 목록 조회", response));
-    }
-    @GetMapping("/device-categories/{categoryId}")
-    public ResponseEntity<ApiResponse<List<DeviceCategoryResponse>>> getCategoryInfosById() {
-        List<DeviceCategoryResponse> response = deviceCategoryService.getCategoryInfoTree();
-        return ResponseEntity.ok(ApiResponse.success("개별 카테고리 정보 조회", response));
-    }
 
-    @PostMapping("/device-categories")
-    public ResponseEntity<ApiResponse<DeviceCategoryResponse>> createCategory(
-            @Valid @RequestBody DeviceCategoryRequest request) {
-        DeviceCategoryResponse response = deviceCategoryService.createCategory(request);
-        return ResponseEntity.ok(ApiResponse.success("장비 카테고리 생성", response));
-    }
-
-    @PutMapping("/device-categories/{categoryId}")
-    public ResponseEntity<ApiResponse<DeviceCategoryResponse>> updateCategory(
-            @PathVariable Long categoryId,
-            @Valid @RequestBody DeviceCategoryRequest request) {
-        DeviceCategoryResponse response = deviceCategoryService.updateCategory(categoryId, request);
-        return ResponseEntity.ok(ApiResponse.success("장비 카테고리 수정", response));
-    }
-
-    @DeleteMapping("/device-categories/{categoryId}")
-    public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long categoryId) {
-        deviceCategoryService.deleteCategory(categoryId);
-        return ResponseEntity.ok(ApiResponse.success("장비 카테고리 삭제"));
-    }
-
-    @PutMapping("/device-categories/{categoryId}/schema")
-    public ResponseEntity<ApiResponse<DeviceCategoryResponse>> updateCategorySchema(
-            @PathVariable Long categoryId,
-            @RequestBody List<PointSchemaDefinition> schema) {
-        DeviceCategoryResponse response = deviceCategoryService.updateSchema(categoryId, schema);
-        return ResponseEntity.ok(ApiResponse.success("스키마 정의 업데이트", response));
-    }
-
-    @GetMapping("/device-categories/{categoryId}/devices")
-    public ResponseEntity<ApiResponse<List<DeviceResponse>>> getDeviceInCategories(
-            @PathVariable Long categoryId) {
-        List<DeviceResponse> response = deviceService.getTargetCategoryDevices(categoryId);
-        return ResponseEntity.ok(ApiResponse.success("카테고리 별 장비 목록 조회", response));
-    }
-
-    @GetMapping("/device-categories/{categoryId}/devices-cnt")
-    public ResponseEntity<ApiResponse<Long>> getDeviceInCategoriesCnt(@PathVariable Long categoryId) {
-        long cnt = deviceService.getTargetCategoryDevicesCnt(categoryId);
-        return ResponseEntity.ok(ApiResponse.success("카테고리 별 장비 갯수", cnt));
-    }
 
     @PutMapping("/placement")
     public ResponseEntity<ApiResponse<DevicePlacementResponse>> saveDevicesPlacement(
@@ -201,20 +142,6 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("장비 배치정보 삭제"));
     }
 
-//    @GetMapping("/xn/points")
-//    public ResponseEntity<ApiResponse<Page<XnViewEntity>>> getXnDevicePoints(
-//            @PageableDefault(size = 10) Pageable pageable) {
-//        Page<XnViewEntity> points = xnSolutionService.getXnDevicePoints(pageable);
-//        return ResponseEntity.ok(ApiResponse.success("장비 포인트 목록 조회", points));
-//    }
-
-//    @PostMapping("/xn/points")
-//    public ResponseEntity<ApiResponse<Page<XnViewEntity>>> getDevicePoints(
-//            @RequestBody XnPointSearchRequest request,
-//            @PageableDefault(size = 10) Pageable pageable) {
-//        Page<XnViewEntity> result = xnSolutionService.getXnDevicePoints(pageable);
-//        return ResponseEntity.ok(ApiResponse.success("장비 포인트 목록 조회", result));
-//    }
 
     @PutMapping("/{deviceId}/points/tag-mapping")
     public ResponseEntity<ApiResponse<Void>> saveTagMapping(

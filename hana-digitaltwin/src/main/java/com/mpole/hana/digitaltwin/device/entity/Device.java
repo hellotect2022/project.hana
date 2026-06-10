@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.device.entity;
 
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
+import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import jakarta.persistence.*;
 import lombok.*;
@@ -49,6 +50,15 @@ public class Device extends DateEntity {
 
     @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true)
     private DevicePlacement placement;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "device_id",
+            referencedColumnName = "device_id",
+            insertable = false,
+            updatable = false
+    )
+    private DeviceCurrentValue deviceCurrentValue;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Comment("장치 고유 속성")
