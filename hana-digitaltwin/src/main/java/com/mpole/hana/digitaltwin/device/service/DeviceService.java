@@ -16,9 +16,12 @@ import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCctvMappingRepository;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSystem;
+import com.mpole.hana.digitaltwin.systemMenu.repository.DeviceSystemRepository;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.unityAsset.service.UnityAssetService;
 import com.mpole.hana.digitaltwin.realtime.api.DeviceRealtimeController;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +44,7 @@ public class DeviceService {
     private final DevicePointRepository devicePointRepository;
     private final UnityAssetService unityAssetService;
     private final DeviceCategoryCascadeService deviceCategoryCascadeService;
+    private final DeviceSystemRepository deviceSystemRepository;
 
     @Transactional
     public DeviceResponse saveDevice(DeviceUpdateRequest request) {
@@ -296,6 +300,27 @@ public class DeviceService {
     @Transactional(readOnly = true)
     public long getTargetCategoryDevicesCnt(Long categoryId) {
         return deviceRepository.countByCategory_CategoryId(categoryId);
+    }
+
+    /**
+     * BMS 시스템에 매핑된 소분류 카테고리 기준 장비 목록 조회
+     */
+    @Transactional(readOnly = true)
+    public List<DeviceResponse> getDevicesBySystemId(Long systemId) {
+        DeviceSystem system = deviceSystemRepository.findByIdWithCategories(systemId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 BMS 시스템이 존재하지 않습니다. id=" + systemId));
+
+        List<Long> categoryIds = system.getCategoryMappings().stream()
+                .map(mapping -> mapping.getCategory().getCategoryId())
+                .toList();
+
+        if (categoryIds.isEmpty()) {
+            return List.of();
+        }
+
+        return deviceRepository.fetchByCategoryIds(categoryIds).stream()
+                .map(DeviceResponse::from)
+                .toList();
     }
 
     @Transactional

@@ -12,14 +12,14 @@ public record DeviceSystemResponse(
         String systemCode,
         Integer sortOrder,
         Boolean active,
-        List<Long> categoryIds,
+        //List<Long> categoryIds,
         List<DeviceSystemCategoryBrief> categories
 ) {
     public static DeviceSystemResponse from(DeviceSystem system) {
         List<DeviceSystemCategory> mappings = system.getCategoryMappings();
-        List<Long> categoryIds = mappings.stream()
-                .map(m -> m.getCategory().getCategoryId())
-                .toList();
+//        List<Long> categoryIds = mappings.stream()
+//                .map(m -> m.getCategory().getCategoryId())
+//                .toList();
         List<DeviceSystemCategoryBrief> categories = mappings.stream()
                 .map(m -> toBrief(m.getCategory()))
                 .toList();
@@ -29,7 +29,7 @@ public record DeviceSystemResponse(
                 system.getSystemCode(),
                 system.getSortOrder(),
                 system.getActive(),
-                categoryIds,
+                //categoryIds,
                 categories
         );
     }

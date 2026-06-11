@@ -9,6 +9,7 @@ import org.springframework.messaging.handler.annotation.support.MethodArgumentNo
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -33,6 +34,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("접근 권한이 없습니다.", "ACCESS_DENIED"));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingServletRequestParameterException(MissingServletRequestParameterException e) {
+        String message = e.getMessage();
+        log.warn("요청 검증 실패: {}", message);
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error(message, "INVALID_REQUEST"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

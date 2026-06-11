@@ -3,6 +3,8 @@ package com.mpole.hana.digitaltwin.device.dto;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePlacement;
+import com.mpole.hana.digitaltwin.realtime.dto.DeviceRealtimeResponse;
+import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
 
@@ -25,12 +27,14 @@ public record DeviceResponse(
         boolean placed,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
-        DevicePropertyInfo propertyInfo
+        DevicePropertyInfo propertyInfo,
+        DeviceRealtimeResponse currentValue
 ) {
     public static DeviceResponse from(Device d) {
         DeviceCategory cat = d.getCategory();
         UnityAsset asset = d.getUnityAsset();
         DevicePlacement p = d.getPlacement();
+        DeviceCurrentValue c = d.getDeviceCurrentValue();
 
         return new DeviceResponse(
                 d.getDeviceId(),
@@ -48,6 +52,7 @@ public record DeviceResponse(
                 d.getCreatedAt(),
                 d.getUpdatedAt()
                 ,d.getPropertyInfo()
+                , DeviceRealtimeResponse.from(c)
         );
     }
 

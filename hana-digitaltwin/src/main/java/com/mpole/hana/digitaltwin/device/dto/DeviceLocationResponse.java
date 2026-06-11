@@ -11,7 +11,7 @@ public record DeviceLocationResponse(
         Long zoneId, String zoneName, String zoneMeshName
 ) {
     public static DeviceLocationResponse from(DevicePlacement p) {
-        if (p == null || p.getUnityZone() == null) return empty();
+        if (p == null || p.getUnityZone() == null) return null;
         UnityLocZone z = p.getUnityZone();
         UnityLocFloor f = z.getFloor();
         UnityLocBuilding b = f.getBuilding();

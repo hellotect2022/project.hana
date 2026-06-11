@@ -89,6 +89,15 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             """)
     List<Device> fetchTargetCategoryDevices(@Param("categoryId") Long categoryId);
 
+    @Query("""
+            SELECT DISTINCT d
+            FROM Device d
+            LEFT JOIN FETCH d.category c
+            WHERE c.categoryId IN :categoryIds
+            ORDER BY d.deviceId ASC
+            """)
+    List<Device> fetchByCategoryIds(@Param("categoryIds") Collection<Long> categoryIds);
+
     long countByCategory_CategoryId(Long categoryId);
 
     long countByUnityAsset_AssetId(Long assetId);

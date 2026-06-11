@@ -5,10 +5,8 @@ import com.mpole.hana.digitaltwin.device.dto.DeviceCategoryResponse;
 import com.mpole.hana.digitaltwin.device.dto.DeviceResponse;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
-import com.mpole.hana.digitaltwin.device.service.DevicePlacementService;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
-import com.mpole.hana.digitaltwin.location.service.LocationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/device")
 @RequiredArgsConstructor
-public class DeviceCategoryController {
+public class DeviceByCategoryController {
     private final DeviceService deviceService;
     private final DeviceCategoryService deviceCategoryService;
 
