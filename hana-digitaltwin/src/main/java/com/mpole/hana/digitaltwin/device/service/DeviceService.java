@@ -184,6 +184,7 @@ public class DeviceService {
             Long deviceId,
             Long categoryId,
             String keyword,
+            boolean unmapped,
             Pageable pageable
     ) {
         String kw = normalizeKeyword(keyword);
@@ -192,8 +193,9 @@ public class DeviceService {
             return DevicePointMappingPageResponse.of(Page.empty(pageable), 0);
         }
         Page<DevicePointMappingItemResponse> page = devicePointRepository
-                .findForRefMappingPage(deviceId, categoryIds, kw, pageable)
+                .findForRefMappingPage(deviceId, categoryIds, kw, unmapped, pageable)
                 .map(DevicePointMappingItemResponse::from);
+        // mappedCount 는 전체 매핑 현황(필터 무관) — 요약 표시용
         long mappedCount = devicePointRepository.countMappedForRefMapping(deviceId, categoryIds, kw);
         return DevicePointMappingPageResponse.of(page, mappedCount);
     }

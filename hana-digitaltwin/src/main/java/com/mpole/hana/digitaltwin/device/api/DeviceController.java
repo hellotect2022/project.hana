@@ -88,10 +88,11 @@ public class DeviceController {
             @RequestParam(required = false) Long deviceId,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "false") boolean unmapped,
             @PageableDefault(size = 50, sort = {"device.deviceName", "tagName"}, direction = Sort.Direction.ASC) Pageable pageable
     ) {
         DevicePointMappingPageResponse result = deviceService.getDevicePointsForMappingPage(
-                deviceId, categoryId, keyword, pageable);
+                deviceId, categoryId, keyword, unmapped, pageable);
         return ResponseEntity.ok(ApiResponse.success("포인트 매핑 목록", result));
     }
 

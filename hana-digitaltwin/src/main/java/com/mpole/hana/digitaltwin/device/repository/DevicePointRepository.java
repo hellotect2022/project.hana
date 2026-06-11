@@ -99,6 +99,9 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             LEFT JOIN FETCH d.category
             WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
               AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
+              AND (:unmapped = FALSE
+                   OR p.refDeviceCode IS NULL OR p.refDeviceCode = ''
+                   OR p.refPointCode IS NULL OR p.refPointCode = '')
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -114,6 +117,9 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             JOIN p.device d
             WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
               AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
+              AND (:unmapped = FALSE
+                   OR p.refDeviceCode IS NULL OR p.refDeviceCode = ''
+                   OR p.refPointCode IS NULL OR p.refPointCode = '')
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -129,6 +135,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("deviceId") Long deviceId,
             @Param("categoryIds") Collection<Long> categoryIds,
             @Param("keyword") String keyword,
+            @Param("unmapped") boolean unmapped,
             Pageable pageable
     );
 
