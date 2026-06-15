@@ -2,6 +2,8 @@ plugins {
     id "java"
     id "org.springframework.boot"
     id "io.spring.dependency-management"
+    // 테스트 → OpenAPI 스펙 생성 (REST Docs 기반)
+    id "com.epages.restdocs-api-spec" version "0.19.4"
 }
 
 dependencies {
@@ -12,6 +14,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.kafka:spring-kafka'
+
+    // API 문서/테스트 (Swagger UI) — Spring Boot 3.4 호환
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
 
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'org.postgresql:postgresql'
@@ -26,4 +31,34 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation "org.springframework.boot:spring-boot-starter-test"
+    // REST Docs + OpenAPI 스펙 생성
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
+}
+
+// ── 테스트로 검증된 OpenAPI 스펙 생성 (순수 REST Docs) ──────────────────────────
+// 테스트가 통과해야 스니펫이 생기고 openapi3 task 가 스펙을 만든다 → 문서 강제 최신화.
+openapi3 {
+    setServer("http://localhost:8084")
+    title = "Hana DigitalTwin API"
+    description = "REST Docs 테스트로 검증된 API 스펙. POST /api/auth/login 의 accessToken 을 Authorize 에 입력해 보호 API 호출."
+    version = "1.0.0"
+    format = "json"
+    outputDirectory = "build/api-spec"
+    outputFileNamePrefix = "openapi3"
+}
+
+// openapi3 task 는 플러그인이 늦게 등록하므로 지연 구성으로 연결
+tasks.matching { it.name == "openapi3" }.configureEach {
+    dependsOn tasks.named("test")   // 테스트 통과 후에만 스펙 생성
+}
+// 생성 스펙을 Swagger UI 가 읽도록 static/docs 로 복사
+tasks.register("copyApiSpec", Copy) {
+    dependsOn "openapi3", "processResources"
+    from layout.buildDirectory.dir("api-spec")
+    into layout.buildDirectory.dir("resources/main/static/docs")
+}
+// 패키징/실행 시 항상 최신 스펙 포함 (테스트 강제 실행)
+tasks.matching { it.name in ["bootJar", "bootRun"] }.configureEach {
+    dependsOn "copyApiSpec"
 }

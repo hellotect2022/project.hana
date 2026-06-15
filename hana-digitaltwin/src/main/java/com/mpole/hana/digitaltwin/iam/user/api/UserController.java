@@ -22,15 +22,15 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<UserResponse>>> getUsers(
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String loginId,
             @RequestParam(required = false) String username,
             @PageableDefault(size = 10, sort = "userId", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        return ResponseEntity.ok(
-                ApiResponse.success("사용자 목록 조회", userService.getUsers(active, loginId, username, pageable))
-        );
+
+        Page<UserResponse> result = userService.getUsers(active, loginId, username, pageable);
+        return ResponseEntity.ok(ApiResponse.success("사용자 목록 조회", result));
     }
 
     @PostMapping

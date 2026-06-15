@@ -148,9 +148,9 @@ public class DeviceService {
     public Page<DeviceResponse> getDevicesPage(String keyword, Long categoryId, Pageable pageable) {
         String kw = normalizeKeyword(keyword);
         List<Long> categoryIds = deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(categoryId);
-        if (categoryIds != null && categoryIds.isEmpty()) {
-            return Page.empty(pageable);
-        }
+//        if (categoryIds != null && categoryIds.isEmpty()) {
+//            return Page.empty(pageable);
+//        }
         return deviceRepository.searchDevices(kw, categoryIds, pageable)
                 .map(DeviceResponse::from);
     }
@@ -293,10 +293,9 @@ public class DeviceService {
     }
 
     @Transactional(readOnly = true)
-    public List<DeviceResponse> getTargetCategoryDevices(Long categoryId) {
-        return deviceRepository.fetchTargetCategoryDevices(categoryId).stream()
-                .map(DeviceResponse::from)
-                .toList();
+    public Page<DeviceResponse> getTargetCategoryDevices(Long categoryId, Pageable pageable) {
+        return deviceRepository.fetchTargetCategoryDevices(categoryId,pageable)
+                .map(DeviceResponse::from);
     }
 
     @Transactional(readOnly = true)
@@ -308,7 +307,7 @@ public class DeviceService {
      * BMS 시스템에 매핑된 소분류 카테고리 기준 장비 목록 조회
      */
     @Transactional(readOnly = true)
-    public List<DeviceResponse> getDevicesBySystemId(Long systemId) {
+    public Page<DeviceResponse> getDevicesBySystemId(Long systemId,Pageable pageable) {
         DeviceSystem system = deviceSystemRepository.findByIdWithCategories(systemId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 BMS 시스템이 존재하지 않습니다. id=" + systemId));
 
@@ -317,12 +316,11 @@ public class DeviceService {
                 .toList();
 
         if (categoryIds.isEmpty()) {
-            return List.of();
+            return Page.empty(pageable);
         }
 
-        return deviceRepository.fetchByCategoryIds(categoryIds).stream()
-                .map(DeviceResponse::from)
-                .toList();
+        return deviceRepository.fetchByCategoryIds(categoryIds,pageable)
+                .map(DeviceResponse::from);
     }
 
     @Transactional

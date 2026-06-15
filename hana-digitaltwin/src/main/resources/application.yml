@@ -1,6 +1,17 @@
 server:
   port: 8084
 
+# Swagger UI: 어노테이션 런타임 스펙 대신, 테스트로 생성된 OpenAPI(/docs/openapi3.json)를 로드 (순수 REST Docs)
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    #url: /docs/openapi3.json
+    # 💡 기본 펼침 상태 설정 (none으로 하면 모두 접힌 채로 시작합니다)
+    doc-expansion: none
+    path: /swagger-ui/index.html
+
+
 spring:
   application:
     name: hana-digitaltwin

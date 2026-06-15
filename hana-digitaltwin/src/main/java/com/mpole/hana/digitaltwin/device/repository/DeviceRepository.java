@@ -87,7 +87,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             WHERE c.categoryId = :categoryId
             ORDER BY d.deviceId ASC
             """)
-    List<Device> fetchTargetCategoryDevices(@Param("categoryId") Long categoryId);
+    Page<Device> fetchTargetCategoryDevices(@Param("categoryId") Long categoryId,Pageable pageable);
 
     @Query("""
             SELECT DISTINCT d
@@ -96,7 +96,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             WHERE c.categoryId IN :categoryIds
             ORDER BY d.deviceId ASC
             """)
-    List<Device> fetchByCategoryIds(@Param("categoryIds") Collection<Long> categoryIds);
+    Page<Device> fetchByCategoryIds(@Param("categoryIds") Collection<Long> categoryIds, Pageable pageable);
 
     long countByCategory_CategoryId(Long categoryId);
 

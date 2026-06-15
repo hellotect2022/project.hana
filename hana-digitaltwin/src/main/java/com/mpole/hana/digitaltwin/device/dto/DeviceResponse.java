@@ -31,6 +31,7 @@ public record DeviceResponse(
         DeviceRealtimeResponse currentValue
 ) {
     public static DeviceResponse from(Device d) {
+        if (d==null) return null;
         DeviceCategory cat = d.getCategory();
         UnityAsset asset = d.getUnityAsset();
         DevicePlacement p = d.getPlacement();

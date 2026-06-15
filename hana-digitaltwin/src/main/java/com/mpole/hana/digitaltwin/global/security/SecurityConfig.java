@@ -42,7 +42,13 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/device-system/roles/**").authenticated()
+                        .requestMatchers(
+                                "/api/device-system/roles/**",
+                                "/api/auth/refresh",
+                                "/api/auth/change-password",
+                                "/api/auth/me",
+                                "/api/auth/sessions/**"
+                                ).authenticated()
                         .requestMatchers(
                                 "/api/**",
                                 "/actuator/**",
@@ -51,7 +57,13 @@ public class SecurityConfig {
                                 "/api/auth/health",
                                 "/api/test",
                                 "/stomp/**",
-                                "/ws/**"
+                                "/ws/**",
+                                // Swagger UI / OpenAPI 문서 (인증 없이 접근 — Authorize 버튼으로 토큰 입력)
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/docs/openapi3.json"
                         ).permitAll()
                         .requestMatchers("/api/auth/unlock/**").hasRole("ADMIN")
                         .anyRequest().authenticated()

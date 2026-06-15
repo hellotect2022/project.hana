@@ -14,17 +14,17 @@ public final class CctvProperty implements DevicePropertyInfo{
     @Builder.Default
     private String type = DevicePropertyType.CCTV.getJsonName();
 
-    @JsonProperty("main_rtsp_url")
-    private String mainRtspUrl;
+    @JsonProperty("main_url")
+    private String mainUrl;
 
-    @JsonProperty("sub_rtsp_url")
-    private String subRtspUrl;
+    @JsonProperty("sub_url")
+    private String subUrl;
 
-    @JsonProperty("stream_user_id")
-    private String streamUserId;
+    @JsonProperty("user_id")
+    private String userId;
 
-    @JsonProperty("stream_password")
-    private String streamPassword;
+    @JsonProperty("password")
+    private String password;
 
     @Override
     public DevicePropertyType propertyType() {
