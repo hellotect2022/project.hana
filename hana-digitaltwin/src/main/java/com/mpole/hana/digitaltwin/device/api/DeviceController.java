@@ -4,6 +4,7 @@ import com.mpole.hana.digitaltwin.device.dto.*;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
 import com.mpole.hana.digitaltwin.device.service.DevicePlacementService;
+import com.mpole.hana.digitaltwin.device.service.DevicePointMappingExcelService;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import com.mpole.hana.digitaltwin.location.dto.UnityLocationResponse;
@@ -21,9 +22,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +43,7 @@ public class DeviceController {
     private final DeviceService deviceService;
     private final DeviceCategoryService deviceCategoryService;
     private final DevicePlacementService devicePlacementService;
+    private final DevicePointMappingExcelService devicePointMappingExcelService;
     private final LocationService locationService;
 
     //region swagger 🔄 장비 및 포인트 저장 명세서
@@ -138,6 +145,75 @@ public class DeviceController {
     ) {
         deviceService.updateDevicePointRefMappings(requests);
         return ResponseEntity.ok(ApiResponse.success("포인트 SI 매핑 저장"));
+    }
+
+    //region swagger 🔄 포인트 매핑 엑셀 양식 다운로드 명세서
+    @Operation(
+            summary = "포인트 매핑 엑셀 양식 다운로드",
+            description = """
+                    현재 필터(category/keyword) 범위의 포인트 전체를 xlsx 양식으로 다운로드합니다.
+                    헤더: 장비명 | 태그 | 포인트명 | point_key | ref_device_code | ref_point_code.
+                    ref_* 컬럼에 SI 매핑값을 입력하여 업로드에 사용합니다. point_key 는 업로드 매칭 키이므로 수정하지 마세요.""",
+            parameters = {
+                    @Parameter(name = "categoryId", description = "카테고리 ID 필터", required = false),
+                    @Parameter(name = "keyword", description = "검색 키워드", required = false)
+            }
+    )
+    //endregion
+    @GetMapping("/points/mapping/template")
+    public ResponseEntity<byte[]> downloadPointMappingTemplate(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String keyword
+    ) {
+        byte[] body = devicePointMappingExcelService.buildTemplate(categoryId, keyword);
+        String filename = URLEncoder.encode("point-mapping-template.xlsx", StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"point-mapping-template.xlsx\"; filename*=UTF-8''" + filename)
+                .body(body);
+    }
+
+    //region swagger 🔄 포인트 매핑 엑셀 업로드 명세서
+    @Operation(
+            summary = "포인트 매핑 엑셀 업로드",
+            description = """
+                    엑셀(xlsx)로 SI 매핑을 일괄 반영합니다. point_key 로 포인트를 매칭하며
+                    ref_device_code / ref_point_code 는 함께 입력하거나 모두 비워야 합니다.
+                    유효한 행만 반영되고, 실패 행은 사유와 함께 결과에 포함됩니다(부분 반영)."""
+    )
+    //endregion
+    @PostMapping(value = "/points/mapping/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<PointMappingImportResult>> importPointMappings(
+            @RequestParam("file") MultipartFile file
+    ) {
+        PointMappingImportResult result = devicePointMappingExcelService.importMappings(file);
+        String message = String.format("총 %d건 중 %d건 반영, %d건 실패",
+                result.total(), result.applied(), result.failed().size());
+        return ResponseEntity.ok(ApiResponse.success(message, result));
+    }
+
+    //region swagger 🔄 포인트 매핑 통계 조회 명세서
+    @Operation(
+            summary = "포인트 매핑 통계 조회",
+            description = """
+                    category/keyword 필터 범위 기준 전체 포인트 수(total)와 SI 매핑 완료 수(mapped)를 반환합니다.
+                    미매핑 토글과 무관하게 범위 전체를 대상으로 산정합니다.""",
+            parameters = {
+                    @Parameter(name = "categoryId", description = "카테고리 ID 필터", required = false),
+                    @Parameter(name = "keyword", description = "검색 키워드", required = false)
+            }
+    )
+    //endregion
+    @GetMapping("/points/mapping/stats")
+    public ResponseEntity<ApiResponse<PointMappingStatsResponse>> getPointMappingStats(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String keyword
+    ) {
+        PointMappingStatsResponse stats = devicePointMappingExcelService.getStats(categoryId, keyword);
+        return ResponseEntity.ok(ApiResponse.success("포인트 매핑 통계", stats));
     }
 
     //region 🔄 장비 정보 수정 명세서
