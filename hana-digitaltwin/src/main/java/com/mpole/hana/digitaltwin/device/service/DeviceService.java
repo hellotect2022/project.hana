@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.digitaltwin.device.dto.BulkActiveRequest;
 import com.mpole.hana.digitaltwin.device.dto.CctvInfoProjection;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingItemResponse;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingPageResponse;
@@ -28,6 +29,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -370,6 +372,48 @@ public class DeviceService {
 
         return DeviceResponse.from(deviceRepository.fetchDeviceById(deviceId));
     }
+
+    /**
+     * 장비 활성상태(active) 일괄 변경.
+     * <p>bulk JPQL UPDATE 는 @PreUpdate 를 우회하므로 updatedAt 을 명시 세팅한다.</p>
+     *
+     * @return 영향받은(변경된) 장비 행 수
+     */
+    //region 장비 활성상태(active) 일괄 변경.
+    @Transactional
+    public int updateActiveBulk(BulkActiveRequest request) {
+        if (request == null || request.scope() == null) {
+            throw new IllegalArgumentException("scope 는 필수입니다.");
+        }
+        if (request.active() == null) {
+            throw new IllegalArgumentException("active 는 필수입니다.");
+        }
+
+        Boolean active = request.active();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        return switch (request.scope()) {
+            case ALL -> deviceRepository.updateActiveAll(active, now);
+            case CATEGORY -> {
+                if (request.categoryId() == null) {
+                    throw new IllegalArgumentException("scope=CATEGORY 인 경우 categoryId 는 필수입니다.");
+                }
+                List<Long> ids = deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(request.categoryId());
+                if (ids == null || ids.isEmpty()) {
+                    yield 0;
+                }
+                yield deviceRepository.updateActiveByCategoryIds(ids, active, now);
+            }
+            case DEVICES -> {
+                List<Long> deviceIds = request.deviceIds();
+                if (deviceIds == null || deviceIds.isEmpty()) {
+                    throw new IllegalArgumentException("scope=DEVICES 인 경우 deviceIds 는 필수입니다.");
+                }
+                yield deviceRepository.updateActiveByDeviceIds(deviceIds, active, now);
+            }
+        };
+    }
+    //endregion
 
     @Transactional
     public void deleteDevice(Long deviceId) {

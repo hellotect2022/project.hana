@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -118,6 +119,27 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             @Param("excludeDeviceIds") Collection<Long> excludeDeviceIds
     );
 
+    //region 🔄 디바이스 활성/비활성화 하는 repo 들
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Device d SET d.active = :active, d.updatedAt = :now")
+    int updateActiveAll(@Param("active") Boolean active, @Param("now") OffsetDateTime now);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Device d SET d.active = :active, d.updatedAt = :now WHERE d.category.categoryId IN :ids")
+    int updateActiveByCategoryIds(@Param("ids") List<Long> ids,
+                                  @Param("active") Boolean active,
+                                  @Param("now") OffsetDateTime now);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Device d SET d.active = :active, d.updatedAt = :now WHERE d.deviceId IN :ids")
+    int updateActiveByDeviceIds(@Param("ids") List<Long> ids,
+                                @Param("active") Boolean active,
+                                @Param("now") OffsetDateTime now);
+    //endregion
+
+
+
+    // 디바이스 정보 변경후에 카테고리 bulk 로 변경하는 로직
     @Modifying(clearAutomatically = true)
     @Query(value = """
             UPDATE tbl_device d

@@ -174,6 +174,40 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("장비 정보 수정", updated));
     }
 
+    //region swagger 🔄 장비 활성상태 일괄 변경 명세서
+    @Operation(
+            summary = "장비 활성상태 일괄 변경",
+            description = """
+                    장비 활성상태(active)를 전체/카테고리/개별 범위(scope)로 일괄 변경합니다.
+                    - scope=ALL: 전체 장비 (categoryId/deviceIds 무시)
+                    - scope=CATEGORY: 선택 카테고리(대·중·소) 하위 소분류 장비 (categoryId 필수)
+                    - scope=DEVICES: 지정한 deviceIds 장비 (deviceIds 필수)
+                    응답 data 는 변경된 장비 건수(updatedCount)입니다.""",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "일괄 변경 범위 및 활성상태 정보",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = BulkActiveRequest.class),
+                            examples = @ExampleObject(
+                                    name = "카테고리 단위 비활성화 예시",
+                                    value = """
+                                            {
+                                              "scope": "CATEGORY",
+                                              "categoryId": 12,
+                                              "active": false
+                                            }
+                                            """
+                            )
+                    )
+            )
+    )
+    //endregion
+    @PatchMapping("/active")
+    public ResponseEntity<ApiResponse<Integer>> updateActiveBulk(@RequestBody BulkActiveRequest request) {
+        int updated = deviceService.updateActiveBulk(request);
+        return ResponseEntity.ok(ApiResponse.success(updated + "건 활성상태 변경", updated));
+    }
+
     @DeleteMapping("/{deviceId}")
     public ResponseEntity<ApiResponse<Void>> deleteDevice(@PathVariable Long deviceId) {
         deviceService.deleteDevice(deviceId);
