@@ -15,6 +15,8 @@ dependencies {
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
     // 버전을 생략해도 spring-boot-dependencies가 3.4.1에 맞는 6.x 버전을 자동으로 찾아줍니다.
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
+    // 공유 InfoContributor(PID 노출) 컴파일용. 런타임 actuator는 각 서비스가 제공.
+    compileOnly "org.springframework.boot:spring-boot-starter-actuator"
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 
     testImplementation platform("org.junit:junit-bom:5.11.4")

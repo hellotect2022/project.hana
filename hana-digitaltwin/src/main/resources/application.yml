@@ -52,6 +52,16 @@ spring:
         default_batch_fetch_size: 1000 # 보통 100~500 권장
     defer-datasource-initialization: true  # JPA 테이블 생성 후 data.sql 실행
 
+# SQL 디버깅 로그 (실행 SQL + 바인딩 파라미터 + DDL)
+#  - org.hibernate.SQL=debug          : 실행되는 SQL 문(에러 직전 SQL이 범인)
+#  - org.hibernate.orm.jdbc.bind=trace: ? 자리에 바인딩되는 실제 값 (Hibernate 6)
+#  - org.hibernate.tool.schema=debug  : 시작 시 생성/변경(ALTER/CREATE) DDL
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+    org.hibernate.tool.schema: debug
+
 # JWT 설정 (관제 시스템 최적화)
 jwt:
   secret: hdt-digitaltwin-secret-key-2026-hanaDream-security-token-key-minimum-256-bits
@@ -78,3 +88,30 @@ app:
   log-retention:
     purge-enabled: true
     purge-cron: "0 0 3 * * ?"   # 매일 03:00 (서버 로컬 시간대)
+
+  # 건물조명(LCS) 도메인 — 등록 장비/스키마 확정 전 포인트 tag 계약을 여기서 정의
+  building-lighting:
+    system-id: 3              # tbl_device_system.system_id (건물조명 LCS)
+    onoff-tag: onoff          # 점/소등 상태 포인트 tag_name (DI, 0/1)
+    dimming-tag: dimming      # 디밍(밝기) 포인트 tag_name (AI, 0~100)
+    comm-stale-seconds: 120   # 현재값이 이 시간(초)보다 오래되면 통신 비정상
+
+management:
+  server:
+    port: 8085
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+hdt:
+  monitor:
+    targets:
+      event: http://localhost:8091
+      gateway: http://localhost:8090
+      digitaltwin: http://localhost:8085
+    dependencies: DB=192.168.250.181:5432,Kafka=192.168.250.249:9092,mqtt=192.168.250.249:9092

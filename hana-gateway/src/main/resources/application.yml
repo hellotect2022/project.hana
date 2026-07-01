@@ -5,7 +5,8 @@ spring:
   application:
     name: hana-gateway
   main:
-    web-application-type: none # 웹서비스 없이 시작함
+    #web-application-type: none # 웹서비스 없이 시작함
+    web-application-type: reactive # actuator 전용 management 포트(8090)를 위해 reactive 기동 (메인 서버 8080도 함께 뜸, 비즈니스 컨트롤러 없음)
   kafka:
     bootstrap-servers: 192.168.250.249:9092
     producer:
@@ -71,3 +72,15 @@ hdt:
         core-size: 4
         max-size: 16
         queue-capacity: 0
+
+management:
+  server:
+    port: 8090
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
