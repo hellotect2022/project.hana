@@ -162,6 +162,66 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("keyword") String keyword
     );
 
+    /**
+     * 매핑 페이지 필터(category/keyword)와 동일 범위의 전체 포인트 수.
+     * <p>{@code countMappedForRefMapping} 와 짝을 이루는 total 카운트로, 미매핑 토글과 무관하게
+     * category/keyword 범위 기준 전체 개수를 반환한다.</p>
+     */
+    @Query("""
+            SELECT COUNT(DISTINCT p) FROM DevicePoint p
+            JOIN p.device d
+            WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
+              AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(COALESCE(p.refPointCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            """)
+    long countForRefMapping(
+            @Param("deviceId") Long deviceId,
+            @Param("categoryIds") Collection<Long> categoryIds,
+            @Param("keyword") String keyword
+    );
+
+    /**
+     * 매핑 페이지 필터(category/keyword)와 동일 범위의 전체 포인트 목록(페이징 없음).
+     * <p>엑셀 템플릿 다운로드용. {@code findForRefMappingPage} 의 WHERE 절과 동일 조건을 사용하되
+     * 미매핑 토글 없이 전체를 조회한다.</p>
+     */
+    @Query("""
+            SELECT DISTINCT p FROM DevicePoint p
+            JOIN FETCH p.device d
+            LEFT JOIN FETCH d.category
+            WHERE (:deviceId IS NULL OR d.deviceId = :deviceId)
+              AND (:categoryIds IS NULL OR d.category.categoryId IN :categoryIds)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(COALESCE(p.refPointCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            ORDER BY d.deviceName ASC, p.tagName ASC
+            """)
+    List<DevicePoint> findAllForRefMapping(
+            @Param("deviceId") Long deviceId,
+            @Param("categoryIds") Collection<Long> categoryIds,
+            @Param("keyword") String keyword
+    );
+
+    /** 엑셀 업로드 매칭용 — point_key 로 포인트 단건 조회. */
+    Optional<DevicePoint> findByPointKey(String pointKey);
+
+    /** 엑셀 업로드 매칭용 — 여러 point_key 를 한 번에 조회. */
+    List<DevicePoint> findAllByPointKeyIn(Collection<String> pointKeys);
+
     @Modifying(clearAutomatically = true)
     @Query(value = """
             DELETE FROM tbl_device_point p
