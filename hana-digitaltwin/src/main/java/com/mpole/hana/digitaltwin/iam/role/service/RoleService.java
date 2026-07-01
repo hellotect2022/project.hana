@@ -58,6 +58,12 @@ public class RoleService {
     @Transactional
     public void deleteRole(Long roleId) {
         ensureRoleExists(roleId);
+        long linkedUsers = userRoleRepository.countByRole_RoleId(roleId);
+        if (linkedUsers > 0) {
+            throw new IllegalStateException(
+                    "이 권한에 소속된 사용자가 " + linkedUsers + "명 있어 삭제할 수 없습니다. "
+                    + "소속 사용자를 먼저 해제한 뒤 삭제하세요.");
+        }
         roleRepository.deleteById(roleId);
     }
     @Transactional

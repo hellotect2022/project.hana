@@ -198,15 +198,26 @@ public class DeviceCategoryCascadeService {
         DeviceCategory root = categoryById.get(rootCategoryId);
         Long parentId = root != null && root.getParent() != null ? root.getParent().getCategoryId() : null;
 
-        deviceCategoryRepository.deleteAll(toDelete);
-
-        if (parentId != null) {
-            deviceCategoryRepository.findById(parentId).ifPresent(parent -> {
-                if (!deviceCategoryRepository.existsByParent(parent)) {
-                    parent.setLeaf(true);
-                }
-            });
+        DeviceCategory parent = root.getParent();
+        if (parent != null) {
+            // 부모 컬렉션에서 빼면 orphanRemoval 이 root + 하위 서브트리를 통째로 삭제
+            parent.getChildren().remove(root);
+            if (parent.getChildren().isEmpty()) {
+                parent.setLeaf(true);
+            }
+        } else {
+            // 최상위면 직접 삭제 (cascade 로 서브트리 삭제)
+            deviceCategoryRepository.delete(root);
         }
+//        deviceCategoryRepository.deleteAll(toDelete);
+//
+//        if (parentId != null) {
+//            deviceCategoryRepository.findById(parentId).ifPresent(parent -> {
+//                if (!deviceCategoryRepository.existsByParent(parent)) {
+//                    parent.setLeaf(true);
+//                }
+//            });
+//        }
     }
 
     private void assertNoDeviceKeyConflicts(List<Device> devices, Map<Long, DeviceCategory> categoryById) {

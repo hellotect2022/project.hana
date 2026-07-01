@@ -16,9 +16,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -120,20 +121,32 @@ public class DeviceSystemService {
     }
 
     private void applyCategoryMappings(DeviceSystem system, List<Long> categoryIds) {
-        system.getCategoryMappings().clear();
-        if (categoryIds == null || categoryIds.isEmpty()) {
+        List<Long> targetIds = (categoryIds == null) ? List.of() : categoryIds;
+
+        // 1) 기존 매핑 중 새 목록에 없는 것만 제거 (orphanRemoval → DELETE)
+        system.getCategoryMappings()
+                .removeIf(mapping -> !targetIds.contains(mapping.getCategory().getCategoryId()));
+
+        if (targetIds.isEmpty()) {
             return;
         }
-        List<DeviceSystemCategory> mappings = new ArrayList<>();
-        for (Long categoryId : categoryIds) {
+
+        // 2) 이미 매핑된 categoryId는 그대로 두고(중복 INSERT 방지), 새로 추가된 것만 INSERT
+        Set<Long> existingIds = system.getCategoryMappings().stream()
+                .map(mapping -> mapping.getCategory().getCategoryId())
+                .collect(Collectors.toSet());
+
+        for (Long categoryId : targetIds) {
+            if (existingIds.contains(categoryId)) {
+                continue; // 기존에 있던 항목은 제외
+            }
             DeviceCategory category = deviceCategoryRepository.findById(categoryId)
                     .orElseThrow(() -> new EntityNotFoundException("카테고리를 찾을 수 없습니다. id=" + categoryId));
             if (!category.isSmallCategory()) {
                 throw new IllegalStateException("소분류(depth=2) 카테고리만 매핑할 수 있습니다. id=" + categoryId);
             }
-            mappings.add(DeviceSystemCategory.of(system, category));
+            system.getCategoryMappings().add(DeviceSystemCategory.of(system, category));
         }
-        system.getCategoryMappings().addAll(mappings);
     }
 
     private DeviceSystem getDeviceSystemEntity(Long systemId) {

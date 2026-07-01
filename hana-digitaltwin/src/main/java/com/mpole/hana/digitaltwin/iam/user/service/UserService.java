@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.iam.user.service;
 
+import com.mpole.hana.digitaltwin.iam.role.repository.UserRoleRepository;
 import com.mpole.hana.digitaltwin.iam.user.dto.UserCreateRequest;
 import com.mpole.hana.digitaltwin.iam.user.dto.UserResponse;
 import com.mpole.hana.digitaltwin.iam.user.dto.UserUpdateRequest;
@@ -14,16 +15,33 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public Page<UserResponse> getUsers(Boolean active, String loginId, String username, Pageable pageable) {
-        return userRepository.findUsersByCondition(active, loginId, username, pageable)
-                .map(UserResponse::from);
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getUsers(Boolean active, String loginId, String username, Long roleId, Pageable pageable) {
+        Page<User> page = userRepository.findUsersByCondition(active, loginId, username, roleId, pageable);
+
+        List<Long> userIds = page.getContent().stream().map(User::getUserId).toList();
+        Map<Long, List<UserResponse.RoleBrief>> rolesByUser = userIds.isEmpty()
+                ? Map.of()
+                : userRoleRepository.findWithRoleByUserIds(userIds).stream()
+                .collect(Collectors.groupingBy(
+                        ur -> ur.getUser().getUserId(),
+                        Collectors.mapping(
+                                ur -> new UserResponse.RoleBrief(ur.getRole().getRoleId(), ur.getRole().getRoleName()),
+                                Collectors.toList())));
+
+        return page.map(u -> UserResponse.from(u, rolesByUser.getOrDefault(u.getUserId(), List.of())));
     }
 
     @Transactional

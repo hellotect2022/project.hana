@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/device-system/roles")
 @RequiredArgsConstructor
-@Tag(name = "Device System Permission", description = "BMS 시스템 권한 API")
+@Tag(name = "Device System Permission", description = "디지털트윈 시스템 권한 API")
 public class DeviceSystemPermissionController {
 
     private final DeviceSystemService deviceSystemService;

@@ -26,10 +26,11 @@ public class UserController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String loginId,
             @RequestParam(required = false) String username,
+            @RequestParam(required = false) Long roleId,
             @PageableDefault(size = 10, sort = "userId", direction = Sort.Direction.ASC) Pageable pageable
     ) {
 
-        Page<UserResponse> result = userService.getUsers(active, loginId, username, pageable);
+        Page<UserResponse> result = userService.getUsers(active, loginId, username, roleId, pageable);
         return ResponseEntity.ok(ApiResponse.success("사용자 목록 조회", result));
     }
 
