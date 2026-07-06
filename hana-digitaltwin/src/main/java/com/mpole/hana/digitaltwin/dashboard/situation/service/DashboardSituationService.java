@@ -1,21 +1,36 @@
 package com.mpole.hana.digitaltwin.dashboard.situation.service;
 
+import com.mpole.hana.common.dto.XnPointData;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.*;
+import com.mpole.hana.digitaltwin.device.entity.Device;
+import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.realtime.entity.DeviceSnapshotLast;
+import com.mpole.hana.digitaltwin.realtime.repository.DeviceSnapshotLastRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 통합현황 데이터 제공.
- * <p>현재는 프론트 mock과 동일한 스텁. 집계·시계열은 repository 연동 후 교체 예정.</p>
+ * <p>상단 KPI 일부(신재생 생산·기준층 실내환경)는 실DB 집계, 나머지는 프론트 mock과 동일한 스텁.</p>
  */
 @Service
 @RequiredArgsConstructor
 public class DashboardSituationService {
+
+    private static final Pattern LEADING_NUMBER = Pattern.compile("-?\\d+(?:\\.\\d+)?");
+
+    private final DeviceRepository deviceRepository;
+    private final DeviceSnapshotLastRepository deviceSnapshotLastRepository;
 
     @Transactional(readOnly = true)
     public List<SituationTopKpiItemResponse> getTopKpis() {
@@ -25,6 +40,192 @@ public class DashboardSituationService {
     @Transactional(readOnly = true)
     public SituationBoardResponse getBoard() {
         return stubBoard();
+    }
+
+    /** 신재생 에너지 생산(누적) — 태양광 ceg + 지열 chg 합산 및 설비별 내역. */
+    @Transactional(readOnly = true)
+    public SituationRenewKpiResponse getRenewKpi() {
+        List<Device> devices = deviceRepository.fetchRenewableDevices();
+        Map<Long, DeviceSnapshotLast> currentValueMap = loadSnapshots(devices);
+
+        double solar = 0;
+        double geo = 0;
+        int linkedCount = 0;
+        List<SituationRenewDeviceResponse> deviceItems = new ArrayList<>();
+        for (Device device : devices) {
+            DeviceSnapshotLast currentValue = currentValueMap.get(device.getDeviceId());
+            if (currentValue == null || currentValue.getPoints() == null || currentValue.getPoints().isEmpty()) {
+                continue;
+            }
+            double deviceKwh = 0;
+            String type = null;
+            for (XnPointData point : currentValue.getPoints()) {
+                if (point == null || point.tagName() == null) {
+                    continue;
+                }
+                String tag = point.tagName().trim();
+                if ("ceg".equalsIgnoreCase(tag)) {
+                    double v = parseDouble(point.valueRaw());
+                    solar += v;
+                    deviceKwh += v;
+                    type = "solar";
+                } else if ("chg".equalsIgnoreCase(tag)) {
+                    double v = parseDouble(point.valueRaw());
+                    geo += v;
+                    deviceKwh += v;
+                    type = "geo";
+                }
+            }
+            if (type != null) {
+                linkedCount++;
+                deviceItems.add(SituationRenewDeviceResponse.builder()
+                        .name(device.getDeviceName() != null ? device.getDeviceName() : device.getDeviceKey())
+                        .type(type)
+                        .kwh(round1(deviceKwh))
+                        .build());
+            }
+        }
+
+        return SituationRenewKpiResponse.builder()
+                .productionKwh(round1(solar + geo))
+                .solarKwh(round1(solar))
+                .geoKwh(round1(geo))
+                .deviceCount(linkedCount)
+                .devices(deviceItems)
+                .linked(linkedCount > 0)
+                .source("tbl_device + tbl_device_current_value (RE_PV ceg + RE_GS chg)")
+                .build();
+    }
+
+    /** 전력감시 패널 — 한전 인입(SHV) 순시 계측값. */
+    @Transactional(readOnly = true)
+    public SituationPowerKpiResponse getPowerMonitorKpi() {
+        List<Device> devices = deviceRepository.fetchMainIncomerDevices();
+        Map<Long, DeviceSnapshotLast> currentValueMap = loadSnapshots(devices);
+
+        for (Device device : devices) {
+            DeviceSnapshotLast currentValue = currentValueMap.get(device.getDeviceId());
+            if (currentValue == null || currentValue.getPoints() == null || currentValue.getPoints().isEmpty()) {
+                continue;
+            }
+            Map<String, String> byTag = new LinkedHashMap<>();
+            for (XnPointData point : currentValue.getPoints()) {
+                if (point != null && point.tagName() != null) {
+                    byTag.putIfAbsent(point.tagName().trim(), point.valueRaw());
+                }
+            }
+            return SituationPowerKpiResponse.builder()
+                    .kw(numberOrNull(byTag.get("total-kW")))
+                    .voltage(numberOrNull(byTag.get("avg-V")))
+                    .current(numberOrNull(byTag.get("avg-A")))
+                    .frequency(numberOrNull(byTag.get("HZ")))
+                    .powerFactor(numberOrNull(byTag.get("PF")))
+                    .peak(numberOrNull(byTag.get("peak-w")))
+                    .cumulativeKwh(numberOrNull(byTag.get("kWh")))
+                    .linked(true)
+                    .updatedAt(currentValue.getUpdatedAt() != null ? currentValue.getUpdatedAt().toString() : null)
+                    .source("tbl_device + tbl_device_current_value (PS_PRD_SHV)")
+                    .build();
+        }
+
+        return SituationPowerKpiResponse.builder()
+                .linked(false)
+                .source("PS_PRD_SHV 스냅샷 없음")
+                .build();
+    }
+
+    /** 기준층 실내 환경 — 항온항습기 temp/humi 평균. */
+    @Transactional(readOnly = true)
+    public SituationIndoorEnvKpiResponse getIndoorEnvKpi() {
+        List<Device> devices = deviceRepository.fetchIndoorEnvDevices();
+        Map<Long, DeviceSnapshotLast> currentValueMap = loadSnapshots(devices);
+
+        double tempSum = 0;
+        double humiSum = 0;
+        int tempCount = 0;
+        int humiCount = 0;
+        for (Device device : devices) {
+            DeviceSnapshotLast currentValue = currentValueMap.get(device.getDeviceId());
+            if (currentValue == null || currentValue.getPoints() == null) {
+                continue;
+            }
+            for (XnPointData point : currentValue.getPoints()) {
+                if (point == null || point.tagName() == null) {
+                    continue;
+                }
+                String tag = point.tagName().trim();
+                if ("temp".equalsIgnoreCase(tag)) {
+                    tempSum += parseDouble(point.valueRaw());
+                    tempCount++;
+                } else if ("humi".equalsIgnoreCase(tag)) {
+                    humiSum += parseDouble(point.valueRaw());
+                    humiCount++;
+                }
+            }
+        }
+
+        Double temperature = tempCount > 0 ? round1(tempSum / tempCount) : null;
+        Double humidity = humiCount > 0 ? round1(humiSum / humiCount) : null;
+        return SituationIndoorEnvKpiResponse.builder()
+                .temperature(temperature)
+                .humidity(humidity)
+                .sampleCount(tempCount + humiCount)
+                .linked(tempCount > 0 || humiCount > 0)
+                .source("tbl_device + tbl_device_current_value (HSE_CLG_CHT temp/humi)")
+                .build();
+    }
+
+    private Map<Long, DeviceSnapshotLast> loadSnapshots(List<Device> devices) {
+        Set<Long> ids = devices.stream().map(Device::getDeviceId).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return deviceSnapshotLastRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(DeviceSnapshotLast::getDeviceId, cv -> cv, (a, b) -> a));
+    }
+
+    private static double parseDouble(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0;
+        }
+        String s = raw.trim();
+        try {
+            return Double.parseDouble(s);
+        } catch (NumberFormatException ignored) {
+            Matcher matcher = LEADING_NUMBER.matcher(s);
+            if (matcher.find()) {
+                try {
+                    return Double.parseDouble(matcher.group());
+                } catch (NumberFormatException ignored2) {
+                    return 0;
+                }
+            }
+            return 0;
+        }
+    }
+
+    private static double round1(double value) {
+        return Math.round(value * 10.0) / 10.0;
+    }
+
+    private static Double numberOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.trim();
+        try {
+            return Double.parseDouble(s);
+        } catch (NumberFormatException ignored) {
+            Matcher matcher = LEADING_NUMBER.matcher(s);
+            if (matcher.find()) {
+                try {
+                    return Double.parseDouble(matcher.group());
+                } catch (NumberFormatException ignored2) {
+                    return null;
+                }
+            }
+            return null;
+        }
     }
 
     private static SituationBoardResponse stubBoard() {

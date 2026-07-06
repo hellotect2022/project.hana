@@ -11,6 +11,8 @@ dependencyManagement {
 }
 
 dependencies {
+    api "com.fasterxml.jackson.core:jackson-annotations"
+
     // @ConfigurationProperties 등 메타데이터 생성·IDE 자동완성용 (런타임 전이 없음)
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
     // 버전을 생략해도 spring-boot-dependencies가 3.4.1에 맞는 6.x 버전을 자동으로 찾아줍니다.
