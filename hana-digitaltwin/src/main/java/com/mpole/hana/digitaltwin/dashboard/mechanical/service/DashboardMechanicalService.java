@@ -5,8 +5,6 @@ import com.mpole.hana.digitaltwin.dashboard.mechanical.dto.*;
 import com.mpole.hana.digitaltwin.dashboard.mechanical.support.MechanicalRunStatusResolver;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
-import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
-import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

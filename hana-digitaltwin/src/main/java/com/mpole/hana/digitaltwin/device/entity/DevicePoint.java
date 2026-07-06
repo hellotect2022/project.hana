@@ -1,8 +1,6 @@
 package com.mpole.hana.digitaltwin.device.entity;
 
-import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
-import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Comment;

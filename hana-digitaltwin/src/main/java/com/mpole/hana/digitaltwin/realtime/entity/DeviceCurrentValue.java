@@ -13,16 +13,19 @@ import org.hibernate.type.SqlTypes;
 import java.util.List;
 
 @Entity
-@Table(name = "tbl_device_current_value")
+@Table(name = "tbl_device_current_value") // 구 tbl_device_snapshot_last (points: 맵 → 배열)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DeviceCurrentValue extends DateEntity {
+public class DeviceSnapshotLast extends DateEntity {
     @Id
     @Column(name = "device_id")
     private Long deviceId;
+
+    @Column(name = "device_key")
+    private String deviceKey;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "points", columnDefinition = "jsonb")

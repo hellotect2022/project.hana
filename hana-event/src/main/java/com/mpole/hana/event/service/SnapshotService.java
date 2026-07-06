@@ -75,10 +75,12 @@ public class SnapshotService {
 
         // 2. 전체 Bulk Upsert 쿼리 생성
         String sql = String.format("""
-            INSERT INTO tbl_device_snapshot_last (device_key, device_id, created_at, updated_at, points)
+            INSERT INTO tbl_device_current_value
+                (device_key, device_id, created_at, updated_at, points)
             VALUES %s
             ON CONFLICT (device_id)
             DO UPDATE SET
+                device_key = EXCLUDED.device_key,
                 points = EXCLUDED.points,
                 updated_at = EXCLUDED.updated_at
             """, valuesClause);
