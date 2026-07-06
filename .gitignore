@@ -26,3 +26,8 @@ Thumbs.db
 /hana-digitaltwin/bin/
 /hana-event/bin/
 /hana-gateway/bin/
+
+# Claude 오케스트레이션 산출물 (mpole 브랜치 제외)
+/.claude/
+/docs/
+/qa/
