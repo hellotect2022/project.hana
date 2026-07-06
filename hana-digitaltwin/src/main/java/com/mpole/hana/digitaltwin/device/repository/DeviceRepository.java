@@ -104,7 +104,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
     long countByUnityAsset_AssetId(Long assetId);
 
     boolean existsByDeviceKey(String deviceKey);
-
+ 
     boolean existsByDeviceKeyAndDeviceIdNot(String deviceKey, Long deviceId);
 
     List<Device> findByCategory_CategoryIdIn(Collection<Long> categoryIds);
@@ -154,6 +154,79 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
               AND small.category_id IN (:smallCategoryIds)
             """, nativeQuery = true)
     int bulkRebuildDeviceKeysForSmallCategoriesIn(@Param("smallCategoryIds") Collection<Long> smallCategoryIds);
+    
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'HVAC%'
+           OR d.deviceKey LIKE 'HSE%'
+           OR d.deviceKey LIKE 'ELEC_TE_%'
+           OR d.deviceKey LIKE 'PS_%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchMechanicalSituationDevices();
+
+    @Query("""
+        SELECT d FROM Device d
+        LEFT JOIN d.category c
+        WHERE d.deviceKey LIKE 'RM_KWH%'
+           OR c.categoryCode = 'KWH'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchElectricMeterDevices();
+
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'RE_PV%'
+           OR d.deviceKey LIKE 'RE_GS%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchRenewableDevices();
+
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'HSE_CLG_CHT%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchIndoorEnvDevices();
+
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'PS_PRD_SHV%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchMainIncomerDevices();
+
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'RM_GM%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchGasMeterDevices();
+
+    /** 전력 구간 — 특고압 탭(한전 인입 SHV + 고압반 HV). */
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'PS_PRD_SHV%'
+           OR d.deviceKey LIKE 'PS_PRD_HV%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchHighVoltageDevices();
+
+    /** 전력 구간 — 저압 탭(저압반 LV). */
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'PS_PRD_LV%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchLowVoltageDevices();
+
+    /** 전력 구간 — 발전기 탭(비상발전기 GEN). */
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'PS_PGE_GEN%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchGeneratorDevices(); 
 
 //    @Query("""
 //            SELECT d FROM Device d

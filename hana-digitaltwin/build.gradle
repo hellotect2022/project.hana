@@ -19,6 +19,9 @@ dependencies {
     // API 문서/테스트 (Swagger UI) — Spring Boot 3.4 호환
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
 
+    // 엑셀 다운로드 (포인트 매핑 등) — Apache POI
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'org.postgresql:postgresql'
     runtimeOnly 'com.microsoft.sqlserver:mssql-jdbc'

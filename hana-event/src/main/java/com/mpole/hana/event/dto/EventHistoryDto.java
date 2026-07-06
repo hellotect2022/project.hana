@@ -1,5 +1,6 @@
 package com.mpole.hana.event.dto;
 
+import com.mpole.hana.common.dto.AlarmEvent;
 import com.mpole.hana.common.dto.DeviceBundle;
 import lombok.Builder;
 
@@ -10,6 +11,7 @@ public record EventHistoryDto(
         String eventType,
         UUID eventId,
         Boolean isProcessed,
-        DeviceBundle data
+        DeviceBundle data,
+        AlarmEvent alarm
 ) {
 }
