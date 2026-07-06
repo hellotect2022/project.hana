@@ -5,6 +5,8 @@ import com.mpole.hana.digitaltwin.dashboard.metering.dto.MeteringSituationPanelR
 import com.mpole.hana.digitaltwin.dashboard.metering.dto.MeteringUtilityItemResponse;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
+import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +34,7 @@ public class DashboardMeteringService {
     );
 
     private final DeviceRepository deviceRepository;
-    private final DeviceCurrentValueRepository DeviceCurrentValueRepository;
+    private final DeviceCurrentValueRepository deviceCurrentValueRepository;
 
     @Transactional(readOnly = true)
     public MeteringSituationPanelResponse getSituationUtilities() {
@@ -76,7 +78,7 @@ public class DashboardMeteringService {
         Set<Long> meterIds = meters.stream().map(Device::getDeviceId).collect(Collectors.toSet());
         Map<Long, DeviceCurrentValue> currentValueMap = meterIds.isEmpty()
                 ? Map.of()
-                : DeviceCurrentValueRepository.findAllById(meterIds).stream()
+                : deviceCurrentValueRepository.findAllById(meterIds).stream()
                         .collect(Collectors.toMap(DeviceCurrentValue::getDeviceId, cv -> cv, (a, b) -> a));
 
         int measuring = 0;

@@ -11,6 +11,8 @@ import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerSectionResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerTabResponse;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
+import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +28,7 @@ import java.util.stream.Collectors;
 public class DashboardPowerService {
 
     private final DeviceRepository deviceRepository;
-    private final DeviceCurrentValueRepository DeviceCurrentValueRepository;
+    private final DeviceCurrentValueRepository deviceCurrentValueRepository;
 
     @Transactional(readOnly = true)
     public PowerPageSnapshotResponse getPageSnapshot() {
@@ -46,7 +48,7 @@ public class DashboardPowerService {
         List<Device> meters = deviceRepository.fetchElectricMeterDevices();
         Set<Long> meterIds = meters.stream().map(Device::getDeviceId).collect(Collectors.toSet());
 
-        Map<Long, DeviceCurrentValue> currentValueMap = DeviceCurrentValueRepository.findAllById(meterIds).stream()
+        Map<Long, DeviceCurrentValue> currentValueMap = deviceCurrentValueRepository.findAllById(meterIds).stream()
                 .collect(Collectors.toMap(DeviceCurrentValue::getDeviceId, cv -> cv, (a, b) -> a));
 
         double cumulativeKwh = 0;
@@ -85,7 +87,7 @@ public class DashboardPowerService {
         };
 
         Set<Long> ids = devices.stream().map(Device::getDeviceId).collect(Collectors.toSet());
-        Map<Long, DeviceCurrentValue> snapshots = DeviceCurrentValueRepository.findAllById(ids).stream()
+        Map<Long, DeviceCurrentValue> snapshots = deviceCurrentValueRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(DeviceCurrentValue::getDeviceId, cv -> cv, (a, b) -> a));
 
         List<PowerSectionDeviceResponse> rows = new ArrayList<>();
@@ -144,7 +146,7 @@ public class DashboardPowerService {
             return null;
         }
         Set<Long> ids = incomers.stream().map(Device::getDeviceId).collect(Collectors.toSet());
-        Map<Long, DeviceCurrentValue> snapshots = DeviceCurrentValueRepository.findAllById(ids).stream()
+        Map<Long, DeviceCurrentValue> snapshots = deviceCurrentValueRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(DeviceCurrentValue::getDeviceId, cv -> cv, (a, b) -> a));
 
         List<XnPointData> points = null;
