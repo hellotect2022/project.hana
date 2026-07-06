@@ -16,3 +16,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+/hana-common/bin/
+/hana-digitaltwin/bin/
+/hana-event/bin/
+/hana-gateway/bin/
