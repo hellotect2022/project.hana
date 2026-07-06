@@ -3,6 +3,11 @@
 build/
 !gradle/wrapper/gradle-wrapper.jar
 
+# Eclipse/Java 빌드 산출물 (추적 금지)
+bin/
+**/bin/
+*.class
+
 # IDE
 .idea/
 *.iml

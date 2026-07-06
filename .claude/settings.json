@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -nE '\\\\$wide|\\\\$full|\\\\$alignLeft')",
+      "Bash(npm run *)",
+      "Bash(grep -E \"TS2339.*\\\\\\\\\\\\$|TS2769\")",
+      "Bash(grep -E \"TS2769|\\\\\\\\\\\\$\")",
+      "Bash(./gradlew :hana-common:compileJava -q)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(./gradlew :hana-digitaltwin:compileJava -q)"
+    ]
+  }
+}
