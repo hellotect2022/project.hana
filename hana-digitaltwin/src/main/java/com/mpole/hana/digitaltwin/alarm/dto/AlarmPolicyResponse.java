@@ -17,7 +17,9 @@ public record AlarmPolicyResponse(
         String description,
         AlarmScope scope,
         Long categoryId,
+        String categoryPath,
         Long deviceId,
+        String deviceName,
         String tagName,
         String pointType,
         AlarmConditionKind conditionKind,
@@ -34,6 +36,11 @@ public record AlarmPolicyResponse(
         OffsetDateTime updatedAt
 ) {
     public static AlarmPolicyResponse from(AlarmPolicy p) {
+        return from(p, null, null);
+    }
+
+    /** deviceName/categoryPath 는 소프트 참조(deviceId/categoryId)를 서비스에서 resolve 해 전달한다. */
+    public static AlarmPolicyResponse from(AlarmPolicy p, String deviceName, String categoryPath) {
         if (p == null) return null;
 
         List<AlarmPolicyLevelItem> levelItems = p.getLevels().stream()
@@ -52,7 +59,9 @@ public record AlarmPolicyResponse(
                 .description(p.getDescription())
                 .scope(p.getScope())
                 .categoryId(p.getCategoryId())
+                .categoryPath(categoryPath)
                 .deviceId(p.getDeviceId())
+                .deviceName(deviceName)
                 .tagName(p.getTagName())
                 .pointType(p.getPointType())
                 .conditionKind(p.getConditionKind())

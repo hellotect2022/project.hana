@@ -58,11 +58,14 @@ public class AlarmEvaluator {
             Long deviceId = point.deviceId() != null ? point.deviceId() : bundle.deviceId();
             if (tagName == null || deviceId == null) continue;
 
-            // 매칭 정책 수집: DEVICE 인덱스 + (deviceId→소분류)로 CATEGORY 인덱스.
+            // 우선순위: (device, tag) 개별 정책이 있으면 그것만 적용(카테고리 override),
+            // 없으면 그 디바이스 소분류의 카테고리 정책을 상속. 태그별로 독립 해석.
             List<PolicyView> matched = new ArrayList<>(idx.devicePolicies(deviceId, tagName));
-            Long smallCat = idx.smallCategoryOf(deviceId);
-            if (smallCat != null) {
-                matched.addAll(idx.categoryPolicies(smallCat, tagName));
+            if (matched.isEmpty()) {
+                Long smallCat = idx.smallCategoryOf(deviceId);
+                if (smallCat != null) {
+                    matched.addAll(idx.categoryPolicies(smallCat, tagName));
+                }
             }
             if (matched.isEmpty()) continue;
 

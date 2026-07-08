@@ -8,12 +8,18 @@ import com.mpole.hana.digitaltwin.alarm.entity.AlarmPolicy;
 import com.mpole.hana.digitaltwin.alarm.entity.AlarmPolicyLevel;
 import com.mpole.hana.digitaltwin.alarm.entity.AlarmScope;
 import com.mpole.hana.digitaltwin.alarm.repository.AlarmPolicyRepository;
+import com.mpole.hana.digitaltwin.device.entity.Device;
+import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
+import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
+import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import com.mpole.hana.digitaltwin.event.entity.EventDisplayType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 
@@ -24,6 +30,8 @@ import java.util.Objects;
 public class AlarmPolicyService {
 
     private final AlarmPolicyRepository alarmPolicyRepository;
+    private final DeviceRepository deviceRepository;
+    private final DeviceCategoryRepository deviceCategoryRepository;
 
     public AlarmPolicyResponse create(AlarmPolicyRequest req) {
         validate(req);
@@ -51,19 +59,19 @@ public class AlarmPolicyService {
 
         AlarmPolicy saved = alarmPolicyRepository.save(policy);
         log.info("알람 정책 생성: policyId={}, name={}", saved.getPolicyId(), saved.getPolicyName());
-        return AlarmPolicyResponse.from(saved);
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)
     public List<AlarmPolicyResponse> list() {
         return alarmPolicyRepository.findAllByOrderByPolicyIdDesc().stream()
-                .map(AlarmPolicyResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public AlarmPolicyResponse get(Long id) {
-        return AlarmPolicyResponse.from(findOrThrow(id));
+        return toResponse(findOrThrow(id));
     }
 
     public AlarmPolicyResponse update(Long id, AlarmPolicyRequest req) {
@@ -93,7 +101,7 @@ public class AlarmPolicyService {
 
         AlarmPolicy saved = alarmPolicyRepository.save(policy);
         log.info("알람 정책 수정: policyId={}", saved.getPolicyId());
-        return AlarmPolicyResponse.from(saved);
+        return toResponse(saved);
     }
 
     public void delete(Long id) {
@@ -105,6 +113,35 @@ public class AlarmPolicyService {
     private AlarmPolicy findOrThrow(Long id) {
         return alarmPolicyRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("알람 정책을 찾을 수 없습니다. id=" + id));
+    }
+
+    /**
+     * 소프트 참조(deviceId/categoryId)를 표시용 이름/경로로 resolve 해 응답을 만든다.
+     * 정책은 관리 화면용으로 건수가 적어 정책별 조회로 처리한다.
+     */
+    private AlarmPolicyResponse toResponse(AlarmPolicy p) {
+        String deviceName = null;
+        if (p.getDeviceId() != null) {
+            deviceName = deviceRepository.findById(p.getDeviceId())
+                    .map(Device::getDeviceName)
+                    .orElse(null);
+        }
+        return AlarmPolicyResponse.from(p, deviceName, buildCategoryPath(p.getCategoryId()));
+    }
+
+    /** categoryId 소분류에서 부모 체인을 거슬러 "대 › 중 › 소" 경로 문자열을 만든다. */
+    private String buildCategoryPath(Long categoryId) {
+        if (categoryId == null) return null;
+        DeviceCategory cat = deviceCategoryRepository.findById(categoryId).orElse(null);
+        if (cat == null) return null;
+        Deque<String> parts = new ArrayDeque<>();
+        DeviceCategory cur = cat;
+        int guard = 0;
+        while (cur != null && guard++ < 8) {
+            parts.addFirst(cur.getCategoryName());
+            cur = cur.getParent();
+        }
+        return String.join(" › ", parts);
     }
 
     private void applyLevels(AlarmPolicy policy, List<AlarmPolicyLevelItem> items) {
