@@ -103,7 +103,7 @@ public class MonitorService {
                     .body(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             String reason = summarize(e);
-            log.debug("[monitor] {} health poll 실패: {}", serviceName, reason);
+            log.info("[monitor] {} health poll 실패: {}", serviceName, reason);
             return ServiceMonitor.builder()
                     .service(serviceName)
                     .status(LiveStatus.DOWN)

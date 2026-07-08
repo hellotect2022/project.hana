@@ -107,6 +107,10 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    # RabbitMQ 미사용(호출 코드 0). 안 뜬 broker 핑으로 health 전체가 DOWN(503) 되는 것 방지.
+    rabbit:
+      enabled: false
 
 hdt:
   monitor:
