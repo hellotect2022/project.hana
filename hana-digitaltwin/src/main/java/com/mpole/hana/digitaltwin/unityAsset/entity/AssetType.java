@@ -16,7 +16,8 @@ public enum AssetType {
     ZONE("구역"),
     EVACUATION_ROUTE("피난대피로"),
     TOILET_STALL("화장실 칸"),
-    PARKING_SLOT("주차 면");
+    PARKING_SLOT("주차 면"),
+    PIPE("배관");
 
     private final String label;
 

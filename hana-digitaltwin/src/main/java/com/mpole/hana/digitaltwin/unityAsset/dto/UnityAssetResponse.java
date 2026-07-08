@@ -10,6 +10,8 @@ public record UnityAssetResponse(
         Long assetId,
         String assetName,
         String description,
+        String assetType,
+        String assetTypeLabel,
         Boolean active,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
@@ -19,6 +21,8 @@ public record UnityAssetResponse(
                 .assetId(entity.getAssetId())
                 .assetName(entity.getAssetName())
                 .description(entity.getDescription())
+                .assetType(entity.getAssetType() != null ? entity.getAssetType().name() : null)
+                .assetTypeLabel(entity.getAssetType() != null ? entity.getAssetType().getLabel() : null)
                 .active(entity.getActive())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())

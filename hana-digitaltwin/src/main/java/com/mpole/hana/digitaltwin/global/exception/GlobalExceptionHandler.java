@@ -3,6 +3,7 @@ package com.mpole.hana.digitaltwin.global.exception;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
@@ -90,11 +91,42 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("요청하신 API 경로를 찾을 수 없습니다. "+e.getMessage(), "NOT_FOUND"));
     }
 
+    /**
+     * DB 무결성 위반(FK/UNIQUE 등). Spring이 JPA 예외를 이 타입으로 변환한다.
+     * 예: 다른 계통도/배선이 참조 중인 장비 삭제(FK RESTRICT) → 409로 명확히 안내.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        Throwable root = e.getMostSpecificCause();
+        String rootMsg = root != null && root.getMessage() != null ? root.getMessage() : "";
+        log.warn("데이터 무결성 위반: {}", rootMsg);
+
+        String message;
+        String code;
+        String lower = rootMsg.toLowerCase();
+        if (lower.contains("foreign key")) {
+            message = "다른 항목(계통도/배선 등)에서 참조 중이라 삭제할 수 없습니다.";
+            code = "FK_CONSTRAINT_VIOLATION";
+        } else if (lower.contains("unique") || lower.contains("duplicate")) {
+            message = "이미 존재하는 값입니다. (중복 제약 위반)";
+            code = "UNIQUE_CONSTRAINT_VIOLATION";
+        } else {
+            message = "데이터 무결성 제약을 위반해 처리할 수 없습니다.";
+            code = "DATA_INTEGRITY_VIOLATION";
+        }
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(message, code));
+    }
+
+    /**
+     * Hibernate 레벨의 제약 위반(flush 시점 등 변환 전에 노출되는 경우).
+     */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> constraintViolationException(ConstraintViolationException e) {
-        log.error("제약 조건을 위반함 {}", e.getMessage());
+        log.warn("DB 제약 조건 위반: {}", e.getMessage());
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("요청하신 API 경로를 찾을 수 없습니다. "+e.getMessage(), "NOT_FOUND"));
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("다른 항목에서 참조 중이거나 제약을 위반해 처리할 수 없습니다.", "CONSTRAINT_VIOLATION"));
     }
 }

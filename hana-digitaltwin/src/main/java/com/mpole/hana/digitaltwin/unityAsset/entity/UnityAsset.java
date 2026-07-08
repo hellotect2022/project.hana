@@ -24,6 +24,11 @@ public class UnityAsset extends DateEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "asset_type", nullable = false, length = 32)
+    @Builder.Default
+    private AssetType assetType = AssetType.EQUIPMENT;
+
     @Builder.Default
     private Boolean active = true;
 }

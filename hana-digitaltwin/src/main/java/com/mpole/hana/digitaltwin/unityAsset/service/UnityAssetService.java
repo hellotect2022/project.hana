@@ -3,6 +3,7 @@ package com.mpole.hana.digitaltwin.unityAsset.service;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import com.mpole.hana.digitaltwin.unityAsset.dto.UnityAssetRequest;
 import com.mpole.hana.digitaltwin.unityAsset.dto.UnityAssetResponse;
+import com.mpole.hana.digitaltwin.unityAsset.entity.AssetType;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.unityAsset.repository.UnityAssetRepository;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class UnityAssetService {
         UnityAsset asset = UnityAsset.builder()
                 .assetName(name)
                 .description(request.description())
+                .assetType(AssetType.fromCode(request.assetType()))
                 .active(request.active() == null || request.active())
                 .build();
         return UnityAssetResponse.from(unityAssetRepository.save(asset));
@@ -68,6 +70,7 @@ public class UnityAssetService {
         if (request.description() != null) {
             asset.setDescription(request.description());
         }
+        asset.setAssetType(AssetType.fromCode(request.assetType()));
         if (request.active() != null) {
             asset.setActive(request.active());
         }
