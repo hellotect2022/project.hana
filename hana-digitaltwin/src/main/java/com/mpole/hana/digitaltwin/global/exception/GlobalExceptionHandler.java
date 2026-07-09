@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.global.exception;
 
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
+import io.jsonwebtoken.ExpiredJwtException;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -128,5 +129,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("다른 항목에서 참조 중이거나 제약을 위반해 처리할 수 없습니다.", "CONSTRAINT_VIOLATION"));
+    }
+
+    /**
+     * 토큰 만료. refresh 흐름에서 만료된 리프레시 토큰이 전파되면 여기로 온다.
+     * 401 + REFRESH_TOKEN_EXPIRED 로 내려 프론트가 "세션 만료 → 재로그인"으로 분기할 수 있게 한다.
+     */
+    @ExceptionHandler(ExpiredJwtException.class)
+    public ResponseEntity<ApiResponse<Void>> expiredJwtException(ExpiredJwtException e) {
+        log.warn("토큰 만료됨: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("리프레시 토큰이 만료되었습니다. 다시 로그인해 주세요.", "REFRESH_TOKEN_EXPIRED"));
     }
 }

@@ -90,14 +90,10 @@ public class RefreshTokenService {
      */
     @Transactional
     public RefreshToken validateRefreshToken(String loginId, String deviceId, String requestIp) {
-        // JWT 토큰 자체 검증
-//        if (!jwtTokenProvider.validateToken(token)) {
-//            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다");
-//        }
-
-        // Refresh Token 타입 검증
+        // 리프레시 토큰 JWT 서명/만료/타입(type=refresh) 검증 및 loginId·deviceId 추출은
+        // 호출측 AuthService.refreshToken 에서 수행한다. 여기서는 DB 대조·만료·활동갱신만.
         if (deviceId == null) {
-            throw new IllegalArgumentException("Access Token은 Refresh 용도로 사용할 수 없습니다");
+            throw new IllegalArgumentException("deviceId 가 없는 토큰입니다");
         }
 
         // DB에서 조회
@@ -105,10 +101,10 @@ public class RefreshTokenService {
                 .orElseThrow(() -> new IllegalArgumentException(String.format("해당 device (%s)의 Refresh Token 을 찾을 수 없습니다", deviceId)));
 
         // 만료 여부 확인
-        if (refreshToken.isExpired()) {
-            refreshTokenRepository.delete(refreshToken);
-            throw new IllegalArgumentException("만료된 Refresh Token입니다");
-        }
+//        if (refreshToken.isExpired()) {
+//            refreshTokenRepository.delete(refreshToken);
+//            throw new IllegalArgumentException("만료된 Refresh Token입니다");
+//        }
 
         // 마지막 사용 시간 및 활동 시간 업데이트
         refreshToken.updateLastUsed();

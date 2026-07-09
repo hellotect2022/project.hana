@@ -92,8 +92,19 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponse refreshToken(String loginId, String deviceId, HttpServletRequest httpRequest) {
-        RefreshToken token = refreshTokenService.validateRefreshToken(loginId, deviceId, RequestHeaderUtils.getInstance().getClientIp(httpRequest));
+    public LoginResponse refreshToken(String refreshToken, HttpServletRequest httpRequest) {
+        // 1) 리프레시 토큰 JWT 검증 + 타입(type=refresh) 확인
+        if (refreshToken == null || !jwtTokenProvider.validateToken(refreshToken)
+                || !jwtTokenProvider.isRefreshToken(refreshToken)) {
+            throw new IllegalArgumentException("유효하지 않은 리프레시 토큰입니다.");
+        }
+        // 2) 토큰 claim 에서 신원(loginId/deviceId) 추출 — access 토큰에 의존하지 않음
+        String loginId = jwtTokenProvider.getLoginId(refreshToken);
+        String deviceId = jwtTokenProvider.getDeviceId(refreshToken);
+
+        // 3) DB 대조(제시 토큰=DB 현재 토큰) + 만료 확인
+        RefreshToken token = refreshTokenService.validateRefreshToken(loginId, deviceId,
+                RequestHeaderUtils.getInstance().getClientIp(httpRequest));
 
         User user = userRepository.findByLoginId(token.getLoginId())
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));

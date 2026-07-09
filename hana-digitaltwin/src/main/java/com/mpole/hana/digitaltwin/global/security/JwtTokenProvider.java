@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.global.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -63,6 +64,8 @@ public class JwtTokenProvider {
         try {
             parseClaims(token);
             return true;
+        }catch (ExpiredJwtException e) { // 토큰 만료
+          throw e;
         } catch (JwtException | IllegalArgumentException e) {
             log.warn("JWT 검증 실패: {}", e.getMessage());
             return false;
@@ -109,7 +112,11 @@ public class JwtTokenProvider {
         return accessTokenExpiration;
     }
 
-    private Claims parseClaims(String token) {
+    /**
+     * 토큰을 파싱해 Claims 반환. 만료 시 {@link io.jsonwebtoken.ExpiredJwtException},
+     * 서명/형식 오류 시 그 외 {@link JwtException} 를 던진다(호출측에서 구분 처리 가능).
+     */
+    public Claims parseClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
                 .build()

@@ -44,7 +44,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/device-system/roles/**",
-                                "/api/auth/refresh",
                                 "/api/auth/change-password",
                                 "/api/auth/me",
                                 "/api/auth/sessions/**"

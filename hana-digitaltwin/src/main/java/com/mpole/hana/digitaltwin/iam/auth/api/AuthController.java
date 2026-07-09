@@ -6,6 +6,7 @@ import com.mpole.hana.digitaltwin.global.security.JwtAuthenticationFilter;
 import com.mpole.hana.digitaltwin.iam.auth.dto.ChangePasswordRequest;
 import com.mpole.hana.digitaltwin.iam.auth.dto.LoginRequest;
 import com.mpole.hana.digitaltwin.iam.auth.dto.LoginResponse;
+import com.mpole.hana.digitaltwin.iam.auth.dto.RefreshTokenRequest;
 import com.mpole.hana.digitaltwin.iam.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -71,22 +72,19 @@ public class AuthController {
     //region 🔄 토큰 갱신 명세서
     @Operation(
             summary = "토큰 갱신 (Refresh)",
-            description = "만료된 Access Token을 Header에 담아 호출하면 새로운 토큰을 발급받는다.",
-            // 💡 파라미터가 아니라 여기에 requestBody 설정을 통째로 박아버립니다!
-            // 💡 시큐리티 인증(JWT)이 필요한 API임을 스웨거에 명시 (자물쇠 표시 아이콘 활성화)
-            security = @SecurityRequirement(name = "bearerAuth")
+            description = "리프레시 토큰을 요청 body(`refreshToken`)로 전달하면 새 Access Token을 발급받는다. "
+                    + "Access Token(Bearer 인증) 없이 호출 가능하다."
+            // 인증(Bearer) 불필요 — refreshToken 자체를 body 로 검증하므로 security 미지정(자물쇠 없음)
     )
     //endregion
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(
-            @AuthenticationPrincipal JwtAuthenticationFilter.UserPrincipal principal,
+            @Valid @RequestBody RefreshTokenRequest request,
             HttpServletRequest httpRequest
     ) {
+        var result = authService.refreshToken(request.refreshToken(), httpRequest);
         return ResponseEntity.ok(
-                ApiResponse.success(
-                        "토큰 갱신 성공",
-                        authService.refreshToken(principal.loginId(), principal.deviceId(), httpRequest)
-                )
+                ApiResponse.success("토큰 갱신 성공", result)
         );
     }
 
