@@ -14,6 +14,8 @@ import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.unityAsset.repository.UnityAssetRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +60,17 @@ public class SystemDiagramService {
         return systemDiagramRepository.findAllByOrderBySortOrderAscDiagramIdDesc().stream()
                 .map(SystemDiagramResponse::from)
                 .toList();
+    }
+
+    /** 계통도 목록 페이지 조회. keyword(계통도명/코드) 부분일치 검색(대소문자 무시). */
+    @Transactional(readOnly = true)
+    public Page<SystemDiagramResponse> listPaged(String keyword, Pageable pageable) {
+        boolean hasKeyword = keyword != null && !keyword.isBlank();
+        // null 파라미터를 쿼리 함수 인자로 넘기면 Postgres 가 타입 추론 실패(lower(bytea)) → 분기 처리.
+        Page<SystemDiagram> page = hasKeyword
+                ? systemDiagramRepository.search(keyword.trim(), pageable)
+                : systemDiagramRepository.findAll(pageable);
+        return page.map(SystemDiagramResponse::from);
     }
 
     @Transactional(readOnly = true)
