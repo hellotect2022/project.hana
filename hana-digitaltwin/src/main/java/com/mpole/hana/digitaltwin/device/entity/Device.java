@@ -43,9 +43,14 @@ public class Device extends DateEntity {
     @JoinColumn(name = "category_id")
     private DeviceCategory category;
 
+    /**
+     * @deprecated 3D 에셋은 카테고리(DeviceCategory.defaultAsset) 기준으로 렌더한다.
+     * 컬럼/필드는 단계적 전환을 위해 남겨두되 사용하지 않는다(후속 drop 예정).
+     */
+    @Deprecated
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "asset_id")
-    @Comment("소분류(depth=2) 기본 3D 에셋")
+    @Comment("(deprecated) 디바이스 단위 3D 에셋 — 카테고리 defaultAsset 로 대체됨")
     private UnityAsset unityAsset;
 
     @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true)

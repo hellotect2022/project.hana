@@ -23,7 +23,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
         LEFT JOIN FETCH z.floor f
         LEFT JOIN FETCH f.building b
         LEFT JOIN FETCH d.category c
-        LEFT JOIN FETCH d.unityAsset
+        LEFT JOIN FETCH c.defaultAsset
         WHERE d.deviceId = :deviceId
         """)
     Device fetchDeviceById(@Param("deviceId") Long deviceId);
@@ -43,7 +43,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             LEFT JOIN FETCH d.placement p
             LEFT JOIN FETCH p.unityZone z
             LEFT JOIN FETCH d.category c
-            LEFT JOIN FETCH d.unityAsset
+            LEFT JOIN FETCH c.defaultAsset
             WHERE (:keyword IS NULL OR :keyword = ''
                 OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR LOWER(COALESCE(d.deviceKey, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -84,7 +84,7 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             LEFT JOIN FETCH d.placement p
             LEFT JOIN FETCH p.unityZone z
             LEFT JOIN FETCH d.category c
-            LEFT JOIN FETCH d.unityAsset
+            LEFT JOIN FETCH c.defaultAsset
             WHERE c.categoryId = :categoryId
             ORDER BY d.deviceId ASC
             """)

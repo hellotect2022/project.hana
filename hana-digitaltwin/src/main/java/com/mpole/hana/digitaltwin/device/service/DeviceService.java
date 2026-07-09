@@ -19,8 +19,6 @@ import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSystem;
 import com.mpole.hana.digitaltwin.systemMenu.repository.DeviceSystemRepository;
-import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
-import com.mpole.hana.digitaltwin.unityAsset.service.UnityAssetService; 
 import com.mpole.hana.digitaltwin.realtime.api.DeviceRealtimeController;
 import jakarta.persistence.EntityNotFoundException; 
 import lombok.RequiredArgsConstructor;
@@ -44,7 +42,6 @@ public class DeviceService {
     private final DeviceCategoryRepository deviceCategoryRepository;
     private final DeviceCctvMappingRepository deviceCctvMappingRepository;
     private final DevicePointRepository devicePointRepository;
-    private final UnityAssetService unityAssetService;
     private final DeviceCategoryCascadeService deviceCategoryCascadeService;
     private final DeviceSystemRepository deviceSystemRepository;
 
@@ -61,10 +58,8 @@ public class DeviceService {
                 .description(request.description())
                 .build();
 
-        if (request.assetId() != null) {
-            UnityAsset asset = unityAssetService.getAssetOrThrow(request.assetId());
-            device.setUnityAsset(asset);
-        }
+        // 3D 에셋은 더 이상 디바이스가 아닌 카테고리(defaultAsset) 기준으로 렌더한다.
+        // request.assetId() 는 하위호환을 위해 남겨두되 사용하지 않는다(deprecated).
 
         if (request.categoryId() != null) {
             DeviceCategory category = deviceCategoryRepository.findById(request.categoryId())
@@ -352,12 +347,8 @@ public class DeviceService {
 
             device.setCategory(category);
         }
-        if (request.assetId() != null) {
-            UnityAsset asset = unityAssetService.getAssetOrThrow(request.assetId());
-            device.setUnityAsset(asset);
-        } else {
-            device.setUnityAsset(null);
-        }
+        // 3D 에셋은 카테고리(defaultAsset) 기준으로 렌더한다.
+        // request.assetId() 는 하위호환을 위해 남겨두되 사용하지 않는다(deprecated).
 
         boolean categoryChanged = request.categoryId() != null
                 && !Objects.equals(previousCategoryId, request.categoryId());

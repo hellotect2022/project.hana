@@ -10,6 +10,7 @@ public record DeviceCategoryRequest(
         Long parentId,
         String description,
         Integer displayOrder,
-        Boolean active
+        Boolean active,
+        Long assetId
 ) {
 }

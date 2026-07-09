@@ -21,6 +21,8 @@ public record DeviceCategoryResponse(
         String fullPath,
         Boolean isRoot,
         Boolean isLeaf,
+        Long assetId,
+        String assetName,
         List<PointSchemaDefinition> schemaDefinitions,
         List<DeviceCategoryResponse> children
 ) {
@@ -38,6 +40,8 @@ public record DeviceCategoryResponse(
                 .fullPath(buildCategoryPath(entity))
                 .isRoot(entity.isRoot())
                 .isLeaf(entity.isLeaf())
+                .assetId(entity.getDefaultAsset() != null ? entity.getDefaultAsset().getAssetId() : null)
+                .assetName(entity.getDefaultAsset() != null ? entity.getDefaultAsset().getAssetName() : null)
                 .schemaDefinitions(entity.getSchemaDefinitions() != null ? entity.getSchemaDefinitions() : new ArrayList<>())
                 .children(new ArrayList<>())
                 .build();

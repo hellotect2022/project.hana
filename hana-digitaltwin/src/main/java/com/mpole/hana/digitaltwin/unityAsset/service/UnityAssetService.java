@@ -1,6 +1,6 @@
 package com.mpole.hana.digitaltwin.unityAsset.service;
 
-import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.unityAsset.dto.UnityAssetRequest;
 import com.mpole.hana.digitaltwin.unityAsset.dto.UnityAssetResponse;
 import com.mpole.hana.digitaltwin.unityAsset.entity.AssetType;
@@ -17,7 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UnityAssetService {
     private final UnityAssetRepository unityAssetRepository;
-    private final DeviceRepository deviceRepository;
+    private final DeviceCategoryRepository deviceCategoryRepository;
 
     @Transactional(readOnly = true)
     public List<UnityAssetResponse> getAllAssets(Boolean activeOnly) {
@@ -80,10 +80,10 @@ public class UnityAssetService {
     @Transactional
     public void deleteAsset(Long assetId) {
         getAssetOrThrow(assetId);
-        long linkedDevices = deviceRepository.countByUnityAsset_AssetId(assetId);
-        if (linkedDevices > 0) {
+        long linkedCategories = deviceCategoryRepository.countByDefaultAsset_AssetId(assetId);
+        if (linkedCategories > 0) {
             throw new IllegalStateException(
-                    "이 에셋을 사용 중인 장비가 " + linkedDevices + "대 있어 삭제할 수 없습니다.");
+                    "이 에셋을 기본 3D 에셋으로 사용 중인 카테고리가 " + linkedCategories + "개 있어 삭제할 수 없습니다.");
         }
         unityAssetRepository.deleteById(assetId);
     }

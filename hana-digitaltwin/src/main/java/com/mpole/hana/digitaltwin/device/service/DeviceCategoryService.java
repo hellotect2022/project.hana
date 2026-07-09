@@ -5,6 +5,8 @@ import com.mpole.hana.digitaltwin.device.dto.DeviceCategoryResponse;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
+import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
+import com.mpole.hana.digitaltwin.unityAsset.repository.UnityAssetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,16 @@ public class DeviceCategoryService {
     private final DeviceCategoryRepository deviceCategoryRepository;
     private final DevicePointSchemaSyncService devicePointSchemaSyncService;
     private final DeviceCategoryCascadeService deviceCategoryCascadeService;
+    private final UnityAssetRepository unityAssetRepository;
+
+    /** assetId 로 카테고리 기본 3D 에셋을 조회한다(null 이면 해제). */
+    private UnityAsset resolveDefaultAsset(Long assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        return unityAssetRepository.findById(assetId)
+                .orElseThrow(() -> new RuntimeException("3D 에셋을 찾을 수 없습니다. id=" + assetId));
+    }
 
     @Transactional(readOnly = true)
     public List<DeviceCategoryResponse> getCategoryInfoTree() {
@@ -70,6 +82,7 @@ public class DeviceCategoryService {
                 .enabled(request.active() == null || request.active())
                 .isRoot(parent == null)
                 .isLeaf(true)
+                .defaultAsset(resolveDefaultAsset(request.assetId()))
                 .build();
 
         return DeviceCategoryResponse.from(deviceCategoryRepository.save(category));
@@ -97,6 +110,8 @@ public class DeviceCategoryService {
         if (request.active() != null) {
             category.setEnabled(request.active());
         }
+
+        category.setDefaultAsset(resolveDefaultAsset(request.assetId()));
 
         deviceCategoryRepository.save(category);
 

@@ -32,7 +32,7 @@ public record DeviceBySystemResponse(
 ) {
     public static DeviceBySystemResponse from(Device d) {
         DeviceCategory cat = d.getCategory();
-        UnityAsset asset = d.getUnityAsset();
+        UnityAsset asset = cat != null ? cat.getDefaultAsset() : null;
         DevicePlacement p = d.getPlacement();
         DeviceCurrentValue c = d.getDeviceCurrentValue();
 

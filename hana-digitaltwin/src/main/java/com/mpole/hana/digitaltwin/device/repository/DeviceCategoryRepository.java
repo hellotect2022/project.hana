@@ -30,4 +30,6 @@ public interface DeviceCategoryRepository extends JpaRepository<DeviceCategory,L
     boolean existsByParent(DeviceCategory parent);
 
     boolean existsByCategoryCodeAndDepth(String categoryCode, Integer depth);
+
+    long countByDefaultAsset_AssetId(Long assetId);
 }

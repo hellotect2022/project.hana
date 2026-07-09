@@ -3,6 +3,7 @@ package com.mpole.hana.digitaltwin.device.entity;
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyType;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
+import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Comment;
@@ -47,6 +48,11 @@ public class DeviceCategory extends DateEntity {
     @Column(name = "category_name_en", length = 200)
     @Comment("카테고리 영문 표시명 (선택)")
     private String categoryNameEn;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "asset_id", foreignKey = @ForeignKey(name = "fk_device_category_asset"))
+    @Comment("카테고리 기본 3D 에셋(소속 디바이스 렌더 기준)")
+    private UnityAsset defaultAsset;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "property_type", length = 32)
