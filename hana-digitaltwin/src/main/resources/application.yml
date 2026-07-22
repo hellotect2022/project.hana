@@ -119,3 +119,14 @@ hdt:
       gateway: http://localhost:8090
       digitaltwin: http://localhost:8085
     dependencies: DB=192.168.250.181:5432,Kafka=192.168.250.249:9092,mqtt=192.168.250.249:9092
+  integration:
+    xn:
+      base-url: http://210.91.59.66:6500
+      auth:
+        id: ${XN_AUTH_ID:device-admin}
+        key: ${XN_AUTH_KEY:device-secret-key-2026}   # 운영에선 env 로만 주입하고 이 기본값 제거
+      endpoints:
+        token: /api/auth/token
+        command: /api/device/command
+      timeout-ms: 3000
+      token-response-field: accessToken
