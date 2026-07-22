@@ -1,14 +1,70 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [trxId=%X{trxId}] %msg%n</pattern>
-        </encoder>
-    </appender>
+<!-- 로그 파일 저장 경로 및 파일명 설정 -->
+<property name="LOG_PATH" value="./logs" />
+<property name="LOG_FILE_NAME" value="hana-event" />
 
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-    </root>
+<!-- 1. 콘솔 출력 설정 (개발 및 모니터링용) -->
+<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [trxId=%X{trxId}] %msg%n</pattern>
+    </encoder>
+</appender>
+
+<!-- 2. 파일 저장 및 롤링(Rolling) 설정 -->
+<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_PATH}/${LOG_FILE_NAME}.log</file>
+
+    <!-- SizeAndTimeBasedRollingPolicy: 날짜와 크기를 모두 고려해 롤링 -->
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+        <!-- %d{yyyy-MM-dd}: 매일 파일 분리, %i: 크기가 넘어가면 인덱스(0, 1, 2...) 증가 -->
+        <fileNamePattern>${LOG_PATH}/archived/${LOG_FILE_NAME}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+
+        <!-- 파일 한 개당 최대 크기 (예: 100MB가 넘으면 다음 파일로 쪼갬) -->
+        <maxFileSize>100MB</maxFileSize>
+
+        <!-- 로그 파일 보관 기간 (예: 30일이 지난 로그는 자동 삭제) -->
+        <maxHistory>30</maxHistory>
+
+        <!-- 보관된 전체 로그 파일의 총 용량 제한 (예: 전체 백업 파일이 10GB를 넘으면 오래된 것부터 삭제) -->
+        <totalSizeCap>10GB</totalSizeCap>
+    </rollingPolicy>
+
+    <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [trxId=%X{trxId}] %msg%n</pattern>
+    </encoder>
+</appender>
+
+<!-- 3. [핵심] 비동기(Async) 아펜더 설정 (서비스 Lock 방지) -->
+<appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+    <!-- 데이터를 파일에 기록하는 FILE 아펜더를 비동기 대상으로 지정 -->
+    <appender-ref ref="FILE" />
+
+    <!-- 큐에 로그가 쌓였을 때 백그라운드 스레드가 처리함 (기본값 256) -->
+    <queueSize>1024</queueSize>
+
+    <!-- 큐가 가득 차더라도 로그를 버리지 않고 대기(0으로 설정 시 로그 유실 방지) -->
+    <discardingThreshold>0</discardingThreshold>
+
+    <!-- 애플리케이션 종료 시 큐에 남은 로그가 flush 될 때까지 기다리는 시간(ms) -->
+    <maxFlushTime>5000</maxFlushTime>
+
+    <!-- 로그 발생 위치 정보(Line Number 등)를 추출할지 여부 (성능을 위해 false 권장) -->
+    <includeCallerData>false</includeCallerData>
+</appender>
+
+<!-- 4. 로거 및 기본 루트 설정 -->
+<!-- 우리 프로젝트 코드는 INFO 레벨로 출력 -->
+<logger name="com.mpole.hana" level="INFO" />
+<!-- 카프카 컨슈머 대용량 처리를 고려해 카프카 관련 로그는 WARN으로 상향 (로그 폭탄 방지) -->
+<logger name="org.apache.kafka" level="WARN" />
+<logger name="org.springframework.kafka" level="WARN" />
+
+<!-- 전체 루트 설정: 콘솔과 '비동기 파일 로거'를 사용함 -->
+<root level="INFO">
+    <appender-ref ref="CONSOLE" />
+    <appender-ref ref="ASYNC_FILE" />
+</root>
 
 </configuration>
