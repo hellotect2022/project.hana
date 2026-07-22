@@ -28,9 +28,29 @@ public record DeviceResponse(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         DevicePropertyInfo propertyInfo,
-        DeviceRealtimeResponse currentValue
+        DeviceRealtimeResponse currentValue,
+        List<CommandPointItem> commandPoints
 ) {
+    /**
+     * 디바이스 목록/상세에 임베드되는 제어 포인트 요약.
+     * <p>제어(command) 도메인과의 순환 의존을 피하기 위해 원시 필드만 담고,
+     * DeviceService 가 배치 조회 결과로 조립한다.</p>
+     */
+    public record CommandPointItem(
+            Long commandPointId,
+            String label,
+            String tagName,
+            String onValue,
+            String offValue
+    ) {
+    }
+
     public static DeviceResponse from(Device d) {
+        return from(d, List.of());
+    }
+
+    /** commandPoints 는 서비스에서 배치 조회로 채워 전달한다(뷰어/프론트 미사용 시 무시되므로 안전). */
+    public static DeviceResponse from(Device d, List<CommandPointItem> commandPoints) {
         if (d==null) return null;
         DeviceCategory cat = d.getCategory();
         UnityAsset asset = cat != null ? cat.getDefaultAsset() : null;
@@ -54,6 +74,7 @@ public record DeviceResponse(
                 d.getUpdatedAt()
                 ,d.getPropertyInfo()
                 , DeviceRealtimeResponse.from(c)
+                , commandPoints != null ? commandPoints : List.of()
         );
     }
 

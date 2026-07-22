@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.digitaltwin.command.repository.CommandPointRepository;
 import com.mpole.hana.digitaltwin.device.dto.BulkActiveRequest;
 import com.mpole.hana.digitaltwin.device.dto.CctvInfoProjection;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingItemResponse;
@@ -17,7 +18,9 @@ import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCctvMappingRepository;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSubSystem;
 import com.mpole.hana.digitaltwin.systemMenu.entity.DeviceSystem;
+import com.mpole.hana.digitaltwin.systemMenu.repository.DeviceSubSystemRepository;
 import com.mpole.hana.digitaltwin.systemMenu.repository.DeviceSystemRepository;
 import com.mpole.hana.digitaltwin.realtime.api.DeviceRealtimeController;
 import jakarta.persistence.EntityNotFoundException; 
@@ -29,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,6 +48,8 @@ public class DeviceService {
     private final DevicePointRepository devicePointRepository;
     private final DeviceCategoryCascadeService deviceCategoryCascadeService;
     private final DeviceSystemRepository deviceSystemRepository;
+    private final DeviceSubSystemRepository deviceSubSystemRepository;
+    private final CommandPointRepository commandPointRepository;
 
     @Transactional
     public DeviceResponse saveDevice(DeviceUpdateRequest request) {
@@ -136,9 +142,7 @@ public class DeviceService {
     }
     @Transactional(readOnly = true)
     public List<DeviceResponse> getAllDevices() {
-        return deviceRepository.fetchAllDevices().stream()
-                .map(DeviceResponse::from)
-                .toList();
+        return mapWithCommandPoints(deviceRepository.fetchAllDevices());
     }
 
     @Transactional(readOnly = true)
@@ -148,15 +152,56 @@ public class DeviceService {
 //        if (categoryIds != null && categoryIds.isEmpty()) {
 //            return Page.empty(pageable);
 //        }
-        return deviceRepository.searchDevices(kw, categoryIds, pageable)
-                .map(DeviceResponse::from);
+        return mapWithCommandPoints(deviceRepository.searchDevices(kw, categoryIds, pageable));
     }
 
     @Transactional(readOnly = true)
     public DeviceResponse getTargetDevice(Long deviceId) {
         Device device = deviceRepository.fetchDeviceById(deviceId);
-        return DeviceResponse.from(device);
+        return mapWithCommandPoints(device);
     }
+
+    // region 제어 포인트(command) 임베드 — device_id 배치 1회 조회로 N+1 방지
+    private Map<Long, List<DeviceResponse.CommandPointItem>> loadCommandPointItems(Collection<Long> deviceIds) {
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return Map.of();
+        }
+        return commandPointRepository.findByDevice_DeviceIdInAndActiveTrue(deviceIds).stream()
+                .collect(Collectors.groupingBy(
+                        cp -> cp.getDevice().getDeviceId(),
+                        Collectors.mapping(cp -> new DeviceResponse.CommandPointItem(
+                                cp.getCommandPointId(),
+                                cp.getLabel(),
+                                cp.getPoint() != null ? cp.getPoint().getTagName() : null,
+                                cp.getOnValue(),
+                                cp.getOffValue()
+                        ), Collectors.toList())));
+    }
+
+    private List<DeviceResponse> mapWithCommandPoints(List<Device> devices) {
+        Map<Long, List<DeviceResponse.CommandPointItem>> cmd =
+                loadCommandPointItems(devices.stream().map(Device::getDeviceId).toList());
+        return devices.stream()
+                .map(d -> DeviceResponse.from(d, cmd.getOrDefault(d.getDeviceId(), List.of())))
+                .toList();
+    }
+
+    private Page<DeviceResponse> mapWithCommandPoints(Page<Device> page) {
+        Map<Long, List<DeviceResponse.CommandPointItem>> cmd =
+                loadCommandPointItems(page.getContent().stream().map(Device::getDeviceId).toList());
+        return page.map(d -> DeviceResponse.from(d, cmd.getOrDefault(d.getDeviceId(), List.of())));
+    }
+
+    private DeviceResponse mapWithCommandPoints(Device device) {
+        if (device == null) {
+            return null;
+        }
+        List<DeviceResponse.CommandPointItem> items =
+                loadCommandPointItems(List.of(device.getDeviceId()))
+                        .getOrDefault(device.getDeviceId(), List.of());
+        return DeviceResponse.from(device, items);
+    }
+    // endregion
 
     @Transactional(readOnly = true)
     public List<DevicePointResponse> getDevicePoints(Long deviceId) {
@@ -284,15 +329,12 @@ public class DeviceService {
 
     @Transactional(readOnly = true)
     public List<DeviceResponse> getSearchDevices(Long floorId, Long zoneId) {
-        return deviceRepository.fetchSearchDevices(floorId, zoneId).stream()
-                .map(DeviceResponse::from)
-                .toList();
+        return mapWithCommandPoints(deviceRepository.fetchSearchDevices(floorId, zoneId));
     }
 
     @Transactional(readOnly = true)
     public Page<DeviceResponse> getTargetCategoryDevices(Long categoryId, Pageable pageable) {
-        return deviceRepository.fetchTargetCategoryDevices(categoryId,pageable)
-                .map(DeviceResponse::from);
+        return mapWithCommandPoints(deviceRepository.fetchTargetCategoryDevices(categoryId,pageable));
     }
 
     @Transactional(readOnly = true)
@@ -301,7 +343,8 @@ public class DeviceService {
     }
 
     /**
-     * BMS 시스템에 매핑된 소분류 카테고리 기준 장비 목록 조회
+     * BMS 시스템에 직접 매핑(deviceSubSystem==null)된 소분류 카테고리 기준 장비 목록 조회.
+     * subSystem 밑 카테고리는 제외(그건 getDevicesBySubSystemId 경로).
      */
     @Transactional(readOnly = true)
     public Page<DeviceResponse> getDevicesBySystemId(Long systemId,Pageable pageable) {
@@ -309,6 +352,7 @@ public class DeviceService {
                 .orElseThrow(() -> new EntityNotFoundException("해당 BMS 시스템이 존재하지 않습니다. id=" + systemId));
 
         List<Long> categoryIds = system.getCategoryMappings().stream()
+                //.filter(mapping -> mapping.getDeviceSubSystem() == null)
                 .map(mapping -> mapping.getCategory().getCategoryId())
                 .toList();
 
@@ -316,8 +360,27 @@ public class DeviceService {
             return Page.empty(pageable);
         }
 
-        return deviceRepository.fetchByCategoryIds(categoryIds,pageable)
-                .map(DeviceResponse::from);
+        return mapWithCommandPoints(deviceRepository.fetchByCategoryIds(categoryIds,pageable));
+    }
+
+    /**
+     * 하위 시스템(subSystem)에 매핑된 소분류 카테고리 기준 장비 목록 조회.
+     * subSystem → categoryMappings → categoryIds → devices 경로.
+     */
+    @Transactional(readOnly = true)
+    public Page<DeviceResponse> getDevicesBySubSystemId(Long subSystemId, Pageable pageable) {
+        DeviceSubSystem subSystem = deviceSubSystemRepository.findByIdWithCategories(subSystemId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 하위 시스템이 존재하지 않습니다. id=" + subSystemId));
+
+        List<Long> categoryIds = subSystem.getCategoryMappings().stream()
+                .map(mapping -> mapping.getCategory().getCategoryId())
+                .toList();
+
+        if (categoryIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        return mapWithCommandPoints(deviceRepository.fetchByCategoryIds(categoryIds, pageable));
     }
 
     @Transactional
@@ -361,7 +424,7 @@ public class DeviceService {
             deviceCategoryCascadeService.syncSingleDeviceKeys(deviceId);
         }
 
-        return DeviceResponse.from(deviceRepository.fetchDeviceById(deviceId));
+        return mapWithCommandPoints(deviceRepository.fetchDeviceById(deviceId));
     }
 
     /**
