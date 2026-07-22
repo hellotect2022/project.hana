@@ -26,14 +26,14 @@ import java.util.stream.Collectors;
 public class DeviceSystemService {
 
     private final DeviceSystemRepository deviceSystemRepository;
-    private final DeviceCategoryRepository deviceCategoryRepository;
     private final RoleDeviceSystemRepository roleDeviceSystemRepository;
+    private final DeviceCategoryRepository deviceCategoryRepository;
     private final EntityManager entityManager;
     private final RoleService roleService;
 
     @Transactional(readOnly = true)
     public List<DeviceSystemResponse> getDeviceSystems() {
-        return deviceSystemRepository.findAllWithCategories()
+        return deviceSystemRepository.findAllWithSubSystemsAndCategories()
                 .stream()
                 .map(DeviceSystemResponse::from)
                 .toList();
@@ -63,8 +63,9 @@ public class DeviceSystemService {
         if (deviceSystemRepository.existsBySystemCode(request.systemCode())) {
             throw new IllegalStateException("이미 존재하는 시스템 코드입니다.");
         }
+        // subSystem 없는 시스템은 소분류를 시스템에 직접 매핑할 수 있다(직접 매핑, deviceSubSystem=null).
         DeviceSystem system = DeviceSystem.create(request);
-        applyCategoryMappings(system, request.categoryIds());
+        applyDirectCategoryMappings(system, request.categoryIds());
         deviceSystemRepository.save(system);
     }
 
@@ -80,7 +81,8 @@ public class DeviceSystemService {
             throw new IllegalStateException("이미 존재하는 시스템 코드입니다.");
         }
         system.update(request);
-        applyCategoryMappings(system, request.categoryIds());
+        // 직접 매핑(deviceSubSystem==null)만 replace. subSystem 밑 매핑은 건드리지 않는다.
+        applyDirectCategoryMappings(system, request.categoryIds());
     }
 
     @Transactional
@@ -120,25 +122,31 @@ public class DeviceSystemService {
         roleDeviceSystemRepository.saveAll(mappings);
     }
 
-    private void applyCategoryMappings(DeviceSystem system, List<Long> categoryIds) {
+    /**
+     * 시스템 직접 매핑(deviceSubSystem == null)을 목표 목록과 일치시킨다.
+     * subSystem 밑 매핑(deviceSubSystem != null)은 절대 건드리지 않는다.
+     */
+    private void applyDirectCategoryMappings(DeviceSystem system, List<Long> categoryIds) {
         List<Long> targetIds = (categoryIds == null) ? List.of() : categoryIds;
 
-        // 1) 기존 매핑 중 새 목록에 없는 것만 제거 (orphanRemoval → DELETE)
-        system.getCategoryMappings()
-                .removeIf(mapping -> !targetIds.contains(mapping.getCategory().getCategoryId()));
+        // 1) 직접 매핑 중 새 목록에 없는 것만 제거(subSystem 매핑은 유지). orphanRemoval → DELETE
+        system.getCategoryMappings().removeIf(mapping ->
+                mapping.getDeviceSubSystem() == null
+                        && !targetIds.contains(mapping.getCategory().getCategoryId()));
 
         if (targetIds.isEmpty()) {
             return;
         }
 
-        // 2) 이미 매핑된 categoryId는 그대로 두고(중복 INSERT 방지), 새로 추가된 것만 INSERT
-        Set<Long> existingIds = system.getCategoryMappings().stream()
+        // 2) 이미 존재하는 직접 매핑 categoryId는 그대로 두고, 새로 추가된 것만 INSERT
+        Set<Long> existingDirectIds = system.getCategoryMappings().stream()
+                .filter(mapping -> mapping.getDeviceSubSystem() == null)
                 .map(mapping -> mapping.getCategory().getCategoryId())
                 .collect(Collectors.toSet());
 
         for (Long categoryId : targetIds) {
-            if (existingIds.contains(categoryId)) {
-                continue; // 기존에 있던 항목은 제외
+            if (existingDirectIds.contains(categoryId)) {
+                continue;
             }
             DeviceCategory category = deviceCategoryRepository.findById(categoryId)
                     .orElseThrow(() -> new EntityNotFoundException("카테고리를 찾을 수 없습니다. id=" + categoryId));
@@ -150,7 +158,7 @@ public class DeviceSystemService {
     }
 
     private DeviceSystem getDeviceSystemEntity(Long systemId) {
-        return deviceSystemRepository.findByIdWithCategories(systemId)
+        return deviceSystemRepository.findById(systemId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 BMS 시스템이 존재하지 않습니다."));
     }
 }

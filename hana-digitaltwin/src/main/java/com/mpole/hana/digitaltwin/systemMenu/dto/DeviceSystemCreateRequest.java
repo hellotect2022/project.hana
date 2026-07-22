@@ -9,6 +9,7 @@ public record DeviceSystemCreateRequest(
         @NotBlank(message = "시스템명은 필수입니다.") String systemName,
         @NotBlank(message = "시스템 코드는 필수입니다.") String systemCode,
         @NotNull(message = "정렬 순서는 필수입니다.") Integer sortOrder,
+        // 직접 매핑(subSystem 없는 시스템)용 소분류 카테고리 ID 목록. optional.
         List<Long> categoryIds
 ) {
 }

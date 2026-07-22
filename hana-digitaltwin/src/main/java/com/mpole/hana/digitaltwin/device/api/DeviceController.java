@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -37,6 +39,9 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/device")
 @RequiredArgsConstructor
+@Validated
+//여기서 리스트 "안쪽 원소" 검증(List<@Valid ...>)과 @NotEmpty 같은 파라미터 레벨 제약은 그냥 두면 동작하지 않습니다. 이걸 켜주는 스위치가 클래스 상단의 @Validated입니다.
+//@Validated를 클래스에 붙이면 → 스프링이 그 빈을 MethodValidationPostProcessor로 프록시로 감싸서, 메서드 호출 시점에 파라미터/리스트 원소 제약까지 검사합니다
 @Tag(name = "Device", description = "기본 장비 관리 API")
 public class DeviceController {
 
@@ -308,13 +313,31 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("층, 구역 별 장비 목록 조회", devices));
     }
 
-
-
+    //region swagger 🔄 장비 배치정보 단일 저장 명세서
+    @Operation(
+            summary = "장비 배치정보 단일 저장",
+            description = "여러 장비의 배치정보(위치/회전/스케일 등)를 단일 트랜잭션으로 저장/수정합니다."
+    )
+    //endregion
     @PutMapping("/placement")
     public ResponseEntity<ApiResponse<DevicePlacementResponse>> saveDevicesPlacement(
             @Valid @RequestBody DevicePlacementRequest request) {
         DevicePlacementResponse response = devicePlacementService.save(request);
         return ResponseEntity.ok(ApiResponse.success("장비 배치정보 업데이트", response));
+    }
+
+    //region swagger 🔄 장비 배치정보 일괄 저장 명세서
+    @Operation(
+            summary = "장비 배치정보 일괄 저장",
+            description = "여러 장비의 배치정보(위치/회전/스케일 등)를 단일 트랜잭션으로 일괄 저장/수정합니다."
+    )
+    //endregion
+    @PutMapping("/placement/bulk")
+    public ResponseEntity<ApiResponse<List<DevicePlacementResponse>>> saveDevicesPlacementBulk(
+            @RequestBody @Valid @NotEmpty List<@Valid DevicePlacementRequest> requests) {
+        log.info("장비 배치 일괄 저장: count={}", requests.size());
+        List<DevicePlacementResponse> responses = devicePlacementService.saveAll(requests);
+        return ResponseEntity.ok(ApiResponse.success("장비 배치정보 일괄 업데이트", responses));
     }
 
     @DeleteMapping("/placement")

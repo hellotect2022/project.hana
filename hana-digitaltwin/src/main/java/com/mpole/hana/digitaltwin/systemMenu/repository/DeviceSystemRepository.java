@@ -34,5 +34,25 @@ public interface DeviceSystemRepository extends JpaRepository<DeviceSystem, Long
             """)
     Optional<DeviceSystem> findByIdWithCategories(@Param("systemId") Long systemId);
 
+    // === 3단 구조(시스템 → subSystem → 카테고리) fetch 쿼리 ===
 
+    @Query("""
+            SELECT DISTINCT ds
+            FROM DeviceSystem ds
+            LEFT JOIN FETCH ds.subSystems ss
+            LEFT JOIN FETCH ss.categoryMappings cm
+            LEFT JOIN FETCH cm.category
+            ORDER BY ds.sortOrder ASC
+            """)
+    List<DeviceSystem> findAllWithSubSystemsAndCategories();
+
+    @Query("""
+            SELECT DISTINCT ds
+            FROM DeviceSystem ds
+            LEFT JOIN FETCH ds.subSystems ss
+            LEFT JOIN FETCH ss.categoryMappings cm
+            LEFT JOIN FETCH cm.category
+            WHERE ds.systemId = :systemId
+            """)
+    Optional<DeviceSystem> findByIdWithSubSystemsAndCategories(@Param("systemId") Long systemId);
 }

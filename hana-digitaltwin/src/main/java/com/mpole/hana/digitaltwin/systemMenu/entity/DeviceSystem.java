@@ -42,6 +42,13 @@ public class DeviceSystem {
     @Comment("활성화 여부")
     private Boolean active = true;
 
+    // 하위 시스템(subSystem) 레이어. 시스템→subSystem→카테고리 3단 구조의 중간 계층.
+    @OneToMany(mappedBy = "deviceSystem", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<DeviceSubSystem> subSystems = new ArrayList<>();
+
+    // 레거시(비파괴): 시스템에 카테고리를 직접 매핑하던 관계. 3단 전환 후 신규 매핑은 subSystem 기준.
+    // 데이터 마이그레이션/롤백 안전을 위해 관계는 유지한다(직접 매핑은 더 이상 생성하지 않음).
     @OneToMany(mappedBy = "deviceSystem", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<DeviceSystemCategory> categoryMappings = new ArrayList<>();

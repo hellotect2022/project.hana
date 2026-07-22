@@ -46,6 +46,11 @@ public class DevicePlacementService {
     }
 
     @Transactional
+    public List<DevicePlacementResponse> saveAll(List<DevicePlacementRequest> requests) {
+        return requests.stream().map(this::save).toList();
+    }
+
+    @Transactional
     public void deleteByDeviceIds(List<Long> deviceIds) {
         List<Device> devices = deviceRepository.findAllById(deviceIds);
         devices.forEach(Device::clearPlacement);
