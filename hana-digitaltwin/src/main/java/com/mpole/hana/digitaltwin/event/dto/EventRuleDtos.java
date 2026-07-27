@@ -64,8 +64,8 @@ public final class EventRuleDtos {
                     rule.getSeverity(),
                     rule.getActions(),
                     rule.getDisplayType(),
-                    rule.getSopTemplate() != null ? rule.getSopTemplate().getTemplateId() : null,
-                    rule.getSopTemplate() != null ? rule.getSopTemplate().getTemplateName() : null,
+                    rule.getSopTemplateId(),
+                    null,   // sopTemplateName: SOP 도메인 재구축 후 재연결
                     rule.getActive(),
                     rule.getCreatedAt(),
                     rule.getUpdatedAt()

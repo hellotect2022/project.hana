@@ -5,8 +5,6 @@ import com.mpole.hana.digitaltwin.event.dto.EventRuleDtos.EventRuleResponse;
 import com.mpole.hana.digitaltwin.event.entity.EventDisplayType;
 import com.mpole.hana.digitaltwin.event.entity.EventRule;
 import com.mpole.hana.digitaltwin.event.repository.EventRuleRepository;
-import com.mpole.hana.digitaltwin.sop.entity.SopTemplate;
-import com.mpole.hana.digitaltwin.sop.repository.SopTemplateRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +17,6 @@ import java.util.List;
 public class EventRuleService {
 
     private final EventRuleRepository ruleRepository;
-    private final SopTemplateRepository sopTemplateRepository;
 
     @Transactional(readOnly = true)
     public List<EventRuleResponse> findAll() {
@@ -30,7 +27,7 @@ public class EventRuleService {
 
     @Transactional(readOnly = true)
     public EventRuleResponse findById(Long ruleId) {
-        return ruleRepository.findByIdWithSopTemplate(ruleId)
+        return ruleRepository.findById(ruleId)
                 .map(EventRuleResponse::from)
                 .orElseThrow(() -> new EntityNotFoundException("이벤트 규칙을 찾을 수 없습니다."));
     }
@@ -90,13 +87,8 @@ public class EventRuleService {
         rule.setActions(request.actions());
         EventDisplayType displayType = request.displayType() != null ? request.displayType() : EventDisplayType.SIMPLE;
         rule.setDisplayType(displayType);
-        if (request.sopTemplateId() != null) {
-            SopTemplate template = sopTemplateRepository.findById(request.sopTemplateId())
-                    .orElseThrow(() -> new EntityNotFoundException("SOP 템플릿을 찾을 수 없습니다."));
-            rule.setSopTemplate(template);
-        } else {
-            rule.setSopTemplate(null);
-        }
+        // SOP 템플릿 바인딩: soft 참조(Long). 존재 검증은 v2 SOP 재구축 후 재연결.
+        rule.setSopTemplateId(request.sopTemplateId());
         if (request.active() != null) {
             rule.setActive(request.active());
         }

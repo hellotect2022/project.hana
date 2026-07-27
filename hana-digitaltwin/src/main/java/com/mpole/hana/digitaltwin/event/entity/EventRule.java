@@ -1,7 +1,6 @@
 package com.mpole.hana.digitaltwin.event.entity;
 
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
-import com.mpole.hana.digitaltwin.sop.entity.SopTemplate;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -64,9 +63,9 @@ public class EventRule extends DateEntity {
     @Builder.Default
     private EventDisplayType displayType = EventDisplayType.SIMPLE;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sop_template_id")
-    private SopTemplate sopTemplate;
+    // SOP 템플릿 바인딩(soft 참조). 기존 SopTemplate 엔티티 결합 제거 — v2 SOP 재구축 시 재연결.
+    @Column(name = "sop_template_id")
+    private Long sopTemplateId;
 
     @Column(nullable = false)
     @Builder.Default

@@ -4,7 +4,7 @@ import com.mpole.hana.digitaltwin.event.dto.EventRuleDtos.EventInstanceCreateReq
 import com.mpole.hana.digitaltwin.event.dto.EventRuleDtos.EventInstanceSummary;
 import com.mpole.hana.digitaltwin.event.service.EventInstanceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
-import com.mpole.hana.digitaltwin.sop.dto.SopRuntimeDtos.EventDisplayResponse;
+import com.mpole.hana.digitaltwin.event.dto.EventDisplayDtos.EventDisplayResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

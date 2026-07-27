@@ -1,54 +1,41 @@
 package com.mpole.hana.digitaltwin.sop.api;
 
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
-import com.mpole.hana.digitaltwin.sop.dto.SopRuntimeDtos.*;
+import com.mpole.hana.digitaltwin.sop.dto.SopInstanceDtos.CreateRequest;
+import com.mpole.hana.digitaltwin.sop.dto.SopInstanceDtos.InstanceResponse;
+import com.mpole.hana.digitaltwin.sop.dto.SopInstanceDtos.SaveResultRequest;
 import com.mpole.hana.digitaltwin.sop.service.SopRuntimeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * SOP 런타임(실행 인스턴스) API.
+ */
 @RestController
 @RequestMapping("/api/sop/instances")
 @RequiredArgsConstructor
 public class SopRuntimeController {
 
-    private final SopRuntimeService sopRuntimeService;
+    private final SopRuntimeService service;
 
+    /** 인스턴스 생성(스냅샷 고정). */
+    @PostMapping
+    public ResponseEntity<ApiResponse<InstanceResponse>> create(@Valid @RequestBody CreateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("SOP 인스턴스 생성", service.createInstance(request)));
+    }
+
+    /** 인스턴스 조회(스냅샷 + 결과). */
     @GetMapping("/{instanceId}")
-    public ResponseEntity<ApiResponse<SopRuntimePayload>> get(@PathVariable Long instanceId) {
-        return ResponseEntity.ok(
-                ApiResponse.success("SOP 인스턴스 조회", sopRuntimeService.buildRuntimePayload(instanceId))
-        );
+    public ResponseEntity<ApiResponse<InstanceResponse>> get(@PathVariable Long instanceId) {
+        return ResponseEntity.ok(ApiResponse.success("SOP 인스턴스 조회", service.getInstance(instanceId)));
     }
 
-    @PostMapping("/{instanceId}/items/{itemId}/complete")
-    public ResponseEntity<ApiResponse<Void>> completeItem(
-            @PathVariable Long instanceId,
-            @PathVariable Long itemId,
-            @RequestParam(required = false) Long actorUserId
-    ) {
-        sopRuntimeService.completeItem(instanceId, itemId, actorUserId);
-        return ResponseEntity.ok(ApiResponse.success("항목 완료 처리"));
-    }
-
-    @PostMapping("/{instanceId}/steps/{stepNo}/complete")
-    public ResponseEntity<ApiResponse<ButtonClickResponse>> completeStep(
-            @PathVariable Long instanceId,
-            @PathVariable int stepNo
-    ) {
-        return ResponseEntity.ok(
-                ApiResponse.success("스텝 완료", sopRuntimeService.completeStep(instanceId, stepNo))
-        );
-    }
-
-    @PostMapping("/{instanceId}/buttons/{buttonKey}/click")
-    public ResponseEntity<ApiResponse<ButtonClickResponse>> clickButton(
-            @PathVariable Long instanceId,
-            @PathVariable String buttonKey,
-            @RequestBody(required = false) ButtonClickRequest request
-    ) {
-        return ResponseEntity.ok(
-                ApiResponse.success("버튼 처리", sopRuntimeService.clickButton(instanceId, buttonKey, request))
-        );
+    /** 결과 저장(방식 B — 실행 결과 한 번에). */
+    @PutMapping("/{instanceId}/result")
+    public ResponseEntity<ApiResponse<InstanceResponse>> saveResult(
+            @PathVariable Long instanceId, @RequestBody SaveResultRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("SOP 결과 저장", service.saveResult(instanceId, request)));
     }
 }

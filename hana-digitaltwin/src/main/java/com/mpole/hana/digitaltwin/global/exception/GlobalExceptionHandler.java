@@ -7,6 +7,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -43,7 +44,7 @@ public class GlobalExceptionHandler {
         String message = e.getMessage();
         log.warn("요청 검증 실패: {}", message);
         return ResponseEntity
-                .badRequest()
+                .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(message, "INVALID_REQUEST"));
     }
 
@@ -54,9 +55,9 @@ public class GlobalExceptionHandler {
                 .stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
-        log.warn("요청 검증 실패: {}", message);
+        log.warn("유요하지 않은 필드값: {}", message);
         return ResponseEntity
-                .badRequest()
+                .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(message, "VALIDATION_ERROR"));
     }
 
@@ -64,8 +65,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
         log.warn("잘못된 요청: {}", e.getMessage());
         return ResponseEntity
-                .badRequest()
+                .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(e.getMessage(), "INVALID_REQUEST"));
+    }
+
+    /**
+     * 요청 본문 파싱 실패(잘못된 JSON, 알 수 없는 componentType/enum 등). 400으로 사유와 함께 안내.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
+        Throwable cause = e.getMostSpecificCause();
+        String message = cause.getMessage() != null ? cause.getMessage() : "요청 본문을 읽을 수 없습니다.";
+        log.warn("요청 본문 파싱 실패: {}", message);
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("요청 본문을 읽을 수 없습니다: " + message, "MALFORMED_REQUEST"));
     }
 
     @ExceptionHandler(IllegalStateException.class)
