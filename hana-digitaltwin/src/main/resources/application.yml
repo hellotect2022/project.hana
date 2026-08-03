@@ -24,14 +24,14 @@ spring:
       password: 1q2w3e
       driver-class-name: org.postgresql.Driver
       # 연계 DB (MSSQL)
-    external:
-      jdbc-url: jdbc:sqlserver://192.168.250.180:1433;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
-      username: sa
-      password: "!Q2w3e4r"
-      #jdbc-url: jdbc:sqlserver://210.91.59.66:2022;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
-      #username: DtMpole
-      #password: mPole20261*
-      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+#    external:
+#      jdbc-url: jdbc:sqlserver://192.168.250.180:1433;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
+#      username: sa
+#      password: "!Q2w3e4r"
+#      #jdbc-url: jdbc:sqlserver://210.91.59.66:2022;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
+#      #username: DtMpole
+#      #password: mPole20261*
+#      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
 
   jpa:
     hibernate:

@@ -2,7 +2,6 @@ package com.mpole.hana.digitaltwin.sop.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.mpole.hana.digitaltwin.sop.enums.ActionKind;
 import com.mpole.hana.digitaltwin.sop.enums.ComponentType;
@@ -38,27 +37,23 @@ public record SopTemplateBody(
     public record StepComponent(
             ComponentType componentType, Integer no, String title,
             StepState state, CompleteSpec complete,
-            NextSpec next,
+            List<NextRule> rules,
             @JsonDeserialize(contentUsing = SopNodeDeserializer.class)
             List<SopNode> components
     ) implements SopNode {
     }
 
-    // ── STEP 전이 규칙 (흐름은 여기서 결정) ──
-    /** default/goto = STEP 번호(문자열/숫자 허용) 또는 "CLOSE". 생략 시 순번상 다음. */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NextSpec(
-            @JsonProperty("default") String defaultTarget,
-            List<NextRule> rules
-    ) {
-    }
-
+    // ── STEP 전이 규칙 (STEP 최상위 rules[]. 래퍼/ default 없음) ──
+    /**
+     * when = 충족돼야 할 컴포넌트 id 목록(AND: 체크된 COMPLETE_ACTION id · 선택된 BUTTON_GROUP 옵션 id).
+     * next = 이동 대상 STEP 번호(문자열/숫자 허용). <b>생략 시 SOP 종료</b>. 규칙 미매칭 시 순번상 다음 STEP.
+     * (Unity C# 예약어 회피로 옛 goto → next 로 명명.)
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record NextRule(
-            String when,                              // 선택된 버튼 id
-            @JsonProperty("goto") String target       // STEP 번호 또는 "CLOSE"
+            List<String> when,
+            String next
     ) {
     }
 
@@ -111,20 +106,14 @@ public record SopTemplateBody(
     ) implements SopNode {
     }
 
-    // ── group 노드 ({ "group": {...} } 로 판별. 테두리 박스 표식, 항상 표시) ──
-
+    // ── GROUP: 논리 그룹 컨테이너 컴포넌트 (componentType:"GROUP", 테두리 없음). FRAME 과 동일 구조 ──
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record GroupNode(GroupBody group) implements SopNode {
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record GroupBody(
-            String id, String label,
+    public record GroupComponent(
+            ComponentType componentType, String id, String label,
             @JsonDeserialize(contentUsing = SopNodeDeserializer.class)
             List<SopNode> components
-    ) {
+    ) implements SopNode {
     }
 
     // ── 서브 객체 ──

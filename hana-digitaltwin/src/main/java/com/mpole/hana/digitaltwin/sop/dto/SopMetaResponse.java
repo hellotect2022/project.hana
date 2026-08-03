@@ -6,6 +6,7 @@ import com.mpole.hana.digitaltwin.sop.enums.CompletionState;
 import com.mpole.hana.digitaltwin.sop.enums.StepState;
 import com.mpole.hana.digitaltwin.sop.enums.Variant;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -37,12 +38,14 @@ public record SopMetaResponse(
         Map<String, String> completionState = new LinkedHashMap<>();
         for (CompletionState v : CompletionState.values()) completionState.put(v.name(), v.getDescription());
 
+        // Collections.unmodifiableMap(LinkedHashMap) — Map.copyOf 는 iteration order 미보장.
+        // 클라이언트가 선언 순서를 신뢰할 수 있도록 순서 보존 래핑.
         return new SopMetaResponse(
-                Map.copyOf(componentType),
-                Map.copyOf(actionKind),
-                Map.copyOf(variant),
-                Map.copyOf(stepState),
-                Map.copyOf(completionState)
+                Collections.unmodifiableMap(componentType),
+                Collections.unmodifiableMap(actionKind),
+                Collections.unmodifiableMap(variant),
+                Collections.unmodifiableMap(stepState),
+                Collections.unmodifiableMap(completionState)
         );
     }
 }
