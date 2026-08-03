@@ -13,7 +13,13 @@ import com.mpole.hana.digitaltwin.device.dto.DeviceUpdateRequest;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategoryDepth;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mpole.hana.digitaltwin.device.dto.DevicePropertyTypeResponse;
+import com.mpole.hana.digitaltwin.device.entity.DeviceCctvMapping;
 import com.mpole.hana.digitaltwin.device.entity.DevicePoint;
+import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
+import com.mpole.hana.digitaltwin.device.property.DevicePropertyType;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCctvMappingRepository;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
@@ -50,6 +56,29 @@ public class DeviceService {
     private final DeviceSystemRepository deviceSystemRepository;
     private final DeviceSubSystemRepository deviceSubSystemRepository;
     private final CommandPointRepository commandPointRepository;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * 장비 property 타입 메타 — 각 DevicePropertyType 과 property_info 스켈레톤(클래스에서 파생).
+     * 카테고리 property_type 선택 / 장비 등록 시 property_info 양식 안내에 사용.
+     */
+    @Transactional(readOnly = true)
+    public List<DevicePropertyTypeResponse> getPropertyTypes() {
+        List<DevicePropertyTypeResponse> out = new ArrayList<>();
+        for (DevicePropertyType v : DevicePropertyType.values()) {
+            JsonNode template;
+            try {
+                // 폴리모픽 변환: {type:X} → 해당 property 클래스 인스턴스 → 직렬화(모든 필드 null 스켈레톤)
+                DevicePropertyInfo inst = objectMapper.convertValue(
+                        java.util.Map.of("type", v.getJsonName()), DevicePropertyInfo.class);
+                template = objectMapper.valueToTree(inst);
+            } catch (Exception e) {
+                template = objectMapper.createObjectNode().put("type", v.getJsonName());
+            }
+            out.add(new DevicePropertyTypeResponse(v.name(), template));
+        }
+        return out;
+    }
 
     @Transactional
     public DeviceResponse saveDevice(DeviceUpdateRequest request) {
@@ -62,6 +91,7 @@ public class DeviceService {
                 .deviceKey(request.deviceKey())
                 .active(request.active())
                 .description(request.description())
+                .propertyInfo(request.propertyInfo())
                 .build();
 
         // 3D 에셋은 더 이상 디바이스가 아닌 카테고리(defaultAsset) 기준으로 렌더한다.
@@ -75,11 +105,24 @@ public class DeviceService {
             }
 
             device.setCategory(category);
+            validatePropertyType(category, request.propertyInfo());
         }
 
         Device saved = deviceRepository.save(device);
         saveDevicePoints(saved, request.points());
         return DeviceResponse.from(deviceRepository.fetchDeviceById(saved.getDeviceId()));
+    }
+
+    /** 카테고리 property_type 과 요청 property_info 타입 정합성 검증(둘 다 명시된 경우만). */
+    private void validatePropertyType(DeviceCategory category, DevicePropertyInfo propertyInfo) {
+        if (category.getPropertyType() == null || propertyInfo == null) {
+            return;
+        }
+        DevicePropertyType actual = propertyInfo.propertyType();
+        if (actual != null && actual != category.getPropertyType()) {
+            throw new IllegalStateException(
+                    "property_info 타입(" + actual + ")이 카테고리 property_type(" + category.getPropertyType() + ")과 다릅니다.");
+        }
     }
 
     private void saveDevicePoints(Device device, List<DevicePointRegisterItem> points) {
@@ -410,6 +453,15 @@ public class DeviceService {
 
             device.setCategory(category);
         }
+
+        // property_info 갱신(제공된 경우만 — 생략 시 기존 유지). 카테고리 타입과 정합성 검증.
+        if (request.propertyInfo() != null) {
+            if (device.getCategory() != null) {
+                validatePropertyType(device.getCategory(), request.propertyInfo());
+            }
+            device.setPropertyInfo(request.propertyInfo());
+        }
+
         // 3D 에셋은 카테고리(defaultAsset) 기준으로 렌더한다.
         // request.assetId() 는 하위호환을 위해 남겨두되 사용하지 않는다(deprecated).
 
@@ -485,16 +537,38 @@ public class DeviceService {
 //                .toList();
 //    }
 
+    /**
+     * 장비 주변 CCTV 매핑 저장(replace). cctvIds 의 순서를 sort_order 로 보존(이벤트 8분할 배치 순서),
+     * 첫 번째를 대표(isPrimary)로 설정. 기존 매핑은 전부 삭제 후 재삽입.
+     */
     @Transactional
     public void postCctvDeviceMapping(Long deviceId, List<Long> cctvIds) {
         deviceCctvMappingRepository.deleteByDeviceId(deviceId);
-        if (cctvIds != null && !cctvIds.isEmpty()) {
-            deviceCctvMappingRepository.bulkInsertMappings(deviceId, cctvIds);
+        if (cctvIds == null || cctvIds.isEmpty()) {
+            return;
         }
+        Device device = deviceRepository.getReferenceById(deviceId);
+        List<DeviceCctvMapping> rows = new ArrayList<>();
+        for (int i = 0; i < cctvIds.size(); i++) {
+            Device cctv = deviceRepository.getReferenceById(cctvIds.get(i));
+            rows.add(DeviceCctvMapping.builder()
+                    .device(device)
+                    .cctv(cctv)
+                    .sortOrder(i)
+                    .primary(i == 0)
+                    .build());
+        }
+        deviceCctvMappingRepository.saveAll(rows);
     }
 
     @Transactional(readOnly = true)
     public List<CctvInfoProjection> getCctvDeviceMapping(Long deviceId) {
         return deviceCctvMappingRepository.findByDeviceId(deviceId);
+    }
+
+    /** CCTV 매핑 피커용 — property_info.type 이 CCTV 인 장비 후보 전체. */
+    @Transactional(readOnly = true)
+    public List<CctvInfoProjection> getCctvCandidates() {
+        return deviceCctvMappingRepository.findCctvCandidates(DevicePropertyType.CCTV.getJsonName());
     }
 }

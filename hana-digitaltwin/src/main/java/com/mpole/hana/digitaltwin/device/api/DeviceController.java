@@ -375,4 +375,15 @@ public class DeviceController {
         List<CctvInfoProjection> list = deviceService.getCctvDeviceMapping(deviceId);
         return ResponseEntity.ok(ApiResponse.success("장비 주변 CCTV 매핑 조회", list));
     }
+
+    @GetMapping("/cctv-candidates")
+    public ResponseEntity<ApiResponse<List<CctvInfoProjection>>> getCctvCandidates() {
+        List<CctvInfoProjection> list = deviceService.getCctvCandidates();
+        return ResponseEntity.ok(ApiResponse.success("CCTV 매핑 후보 목록", list));
+    }
+
+    @GetMapping("/property-types")
+    public ResponseEntity<ApiResponse<List<DevicePropertyTypeResponse>>> getPropertyTypes() {
+        return ResponseEntity.ok(ApiResponse.success("장비 property 타입 메타", deviceService.getPropertyTypes()));
+    }
 }

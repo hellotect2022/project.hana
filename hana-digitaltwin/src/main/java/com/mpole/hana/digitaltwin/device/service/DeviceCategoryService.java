@@ -83,6 +83,7 @@ public class DeviceCategoryService {
                 .isRoot(parent == null)
                 .isLeaf(true)
                 .defaultAsset(resolveDefaultAsset(request.assetId()))
+                .propertyType(request.propertyType())
                 .build();
 
         return DeviceCategoryResponse.from(deviceCategoryRepository.save(category));
@@ -112,6 +113,7 @@ public class DeviceCategoryService {
         }
 
         category.setDefaultAsset(resolveDefaultAsset(request.assetId()));
+        category.setPropertyType(request.propertyType());   // 없으면 null 로 갱신(해제 가능)
 
         deviceCategoryRepository.save(category);
 

@@ -33,14 +33,20 @@ public class BuildingLightingReader {
     private final LightingDeviceRepository lightingDeviceRepository;
     private final BuildingLightingProperties props;
 
-    /** 건물조명 시스템에 매핑된 소분류 카테고리 ID 목록 */
+    /**
+     * 건물조명 시스템에 매핑된 소분류 카테고리 ID 목록.
+     * 3단 구조(시스템 → subSystem → 카테고리)로 전환됨에 따라 하위 시스템들의 카테고리 매핑을
+     * 모두 모아 중복 제거한다.
+     */
     @Transactional(readOnly = true)
     public List<Long> resolveCategoryIds() {
-        DeviceSystem system = deviceSystemRepository.findByIdWithCategories(props.getSystemId())
+        DeviceSystem system = deviceSystemRepository.findByIdWithSubSystemsAndCategories(props.getSystemId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "건물조명 BMS 시스템이 존재하지 않습니다. systemId=" + props.getSystemId()));
-        return system.getCategoryMappings().stream()
+        return system.getSubSystems().stream()
+                .flatMap(subSystem -> subSystem.getCategoryMappings().stream())
                 .map(mapping -> mapping.getCategory().getCategoryId())
+                .distinct()
                 .toList();
     }
 
