@@ -153,6 +153,7 @@ public class AlarmPolicyService {
                     .icon(item.icon())
                     .effect(item.effect())
                     .displayOrder(item.displayOrder())
+                    .outputs(item.outputs())
                     .build();
             policy.addLevel(level);
         }

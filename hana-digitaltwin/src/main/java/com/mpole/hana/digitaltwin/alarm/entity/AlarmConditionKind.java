@@ -6,6 +6,16 @@ package com.mpole.hana.digitaltwin.alarm.entity;
  * - TOGGLE: 디지털(DI) 상태값 일치 비교 (triggerValue "0"/"1")
  */
 public enum AlarmConditionKind {
-    THRESHOLD,
-    TOGGLE
+    THRESHOLD("임계치(AI)"),
+    TOGGLE("토글(DI)");
+
+    private final String description;
+
+    AlarmConditionKind(String description) {
+        this.description = description;
+    }
+
+    public String getDescription() {
+        return description;
+    }
 }

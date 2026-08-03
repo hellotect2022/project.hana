@@ -1,8 +1,11 @@
 package com.mpole.hana.digitaltwin.alarm.entity;
 
+import com.mpole.hana.common.dto.OutputSpec;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 
@@ -86,6 +89,11 @@ public class AlarmHistory extends DateEntity {
 
     @Column(name = "sop_template_id")
     private Long sopTemplateId;
+
+    /** 발생 레벨의 출력 채널 세트 스냅샷(NOTIFY/SOP/CCTV/SMS). 조립 API가 이 값으로 SOP/CCTV 표출 결정. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "outputs", columnDefinition = "jsonb")
+    private OutputSpec outputs;
 
     @Column(name = "icon")
     private String icon;

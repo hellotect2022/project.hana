@@ -253,7 +253,7 @@ public class AlarmPolicyCache {
     private PolicyView toView(PolicyRow p, List<LevelRow> levels) {
         List<PolicyView.PolicyLevelView> levelViews = levels.stream()
                 .map(l -> new PolicyView.PolicyLevelView(
-                        l.level(), l.thresholdValue(), l.icon(), l.effect(), l.displayOrder()))
+                        l.level(), l.thresholdValue(), l.icon(), l.effect(), l.displayOrder(), l.outputs()))
                 .toList();
 
         return new PolicyView(

@@ -155,6 +155,7 @@ public class AlarmEvaluator {
                 .triggerValue(policy.triggerValue())
                 .displayType(policy.displayType())
                 .sopTemplateId(policy.sopTemplateId())
+                .outputs(chosen.outputs())
                 .icon(chosen.icon())
                 .effect(chosen.effect())
                 .effectEnabled(policy.effectEnabled())

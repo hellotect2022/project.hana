@@ -1,5 +1,7 @@
 package com.mpole.hana.event.alarm;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mpole.hana.common.dto.OutputSpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
 public class AlarmPolicyReader {
 
     private final DatabaseClient postgresDatabaseClient;
+    private final ObjectMapper objectMapper;
 
     /**
      * 정책 원본 행(레벨 제외). display_type 컬럼은 SIMPLE/SOP enum name 문자열.
@@ -61,7 +64,8 @@ public class AlarmPolicyReader {
             Double thresholdValue,
             String icon,
             String effect,
-            int displayOrder
+            int displayOrder,
+            OutputSpec outputs     // 등급별 출력 채널 세트(jsonb 파싱, nullable)
     ) {
     }
 
@@ -115,7 +119,7 @@ public class AlarmPolicyReader {
     public Mono<Map<Long, List<LevelRow>>> loadLevelsByPolicyId() {
         String sql = """
                 SELECT l.level_id, l.policy_id, l.level, l.threshold_value,
-                       l.icon, l.effect, l.display_order
+                       l.icon, l.effect, l.display_order, l.outputs
                 FROM tbl_alarm_policy_level l
                 JOIN tbl_alarm_policy p ON p.policy_id = l.policy_id
                 WHERE p.active = true
@@ -129,7 +133,8 @@ public class AlarmPolicyReader {
                         row.get("threshold_value", Double.class),
                         row.get("icon", String.class),
                         row.get("effect", String.class),
-                        toInt(row.get("display_order", Integer.class))
+                        toInt(row.get("display_order", Integer.class)),
+                        parseOutputs(row.get("outputs", String.class))
                 ))
                 .all()
                 .collect(Collectors.groupingBy(LevelRow::policyId))
@@ -170,5 +175,16 @@ public class AlarmPolicyReader {
 
     private static int toInt(Integer v) {
         return v == null ? 0 : v;
+    }
+
+    /** jsonb outputs 문자열을 OutputSpec 으로 파싱. null/파싱실패 시 null(레거시 폴백). */
+    private OutputSpec parseOutputs(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, OutputSpec.class);
+        } catch (Exception e) {
+            log.warn("[AlarmPolicyReader] outputs 파싱 실패(null 처리): {}", e.getMessage());
+            return null;
+        }
     }
 }

@@ -50,6 +50,7 @@ public record AlarmPolicyResponse(
                         .icon(l.getIcon())
                         .effect(l.getEffect())
                         .displayOrder(l.getDisplayOrder())
+                        .outputs(l.getOutputs())
                         .build())
                 .toList();
 

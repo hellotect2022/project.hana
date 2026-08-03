@@ -39,6 +39,12 @@ public class EventSnapshotService {
     }
 
     public Mono<Void> insertEventHistory(EventHistoryDto event) {
+        // ALARM 이벤트는 data(DeviceBundle) 가 없고 alarm 만 담긴다(정본은 tbl_alarm_history 가
+        // AlarmHistoryWriter 로 별도 저장). 여기서 data() 역참조 시 NPE 이므로 skip.
+        if (event.data() == null) {
+            return Mono.empty();
+        }
+
         // [핵심] 1. 같은 배치 내에서 동일 device_id는 '가장 최신 것' 하나만 남깁니다.
         // 이렇게 하면 "cannot affect row a second time" 에러가 원천 차단됩니다.
 

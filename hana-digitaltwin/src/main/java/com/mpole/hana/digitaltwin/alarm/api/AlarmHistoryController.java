@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.alarm.api;
 
 import com.mpole.hana.digitaltwin.alarm.dto.AlarmHistoryPageResponse;
 import com.mpole.hana.digitaltwin.alarm.dto.AlarmHistoryResponse;
+import com.mpole.hana.digitaltwin.alarm.dto.EventDisplayResponse;
 import com.mpole.hana.digitaltwin.alarm.service.AlarmHistoryService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -69,5 +70,18 @@ public class AlarmHistoryController {
     public ResponseEntity<ApiResponse<AlarmHistoryResponse>> get(@PathVariable Long id) {
         AlarmHistoryResponse history = alarmHistoryService.get(id);
         return ResponseEntity.ok(ApiResponse.success("알람 이력 상세 조회", history));
+    }
+
+    @Operation(
+            summary = "이벤트 화면 조립 조회",
+            description = "알람 ID(=정본 alarm_id)로 이벤트 화면을 조립한다. 정본의 outputs 를 근거로 "
+                    + "켜진 표시 채널만 반환: SOP(절차 패널, 최초 조회 시 인스턴스 생성) + CCTV(발생 장비 주변 카메라). "
+                    + "Unity 관제 클라이언트가 이 응답으로 SOP 패널과 CCTV 그리드를 표출한다.",
+            parameters = {@Parameter(name = "id", description = "알람 이력 ID(=eventId)", example = "1", required = true)}
+    )
+    @GetMapping("/{id}/display")
+    public ResponseEntity<ApiResponse<EventDisplayResponse>> display(@PathVariable Long id) {
+        EventDisplayResponse display = alarmHistoryService.getDisplay(id);
+        return ResponseEntity.ok(ApiResponse.success("이벤트 화면 조립", display));
     }
 }

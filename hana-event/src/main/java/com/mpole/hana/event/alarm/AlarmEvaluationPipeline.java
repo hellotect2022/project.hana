@@ -36,6 +36,7 @@ public class AlarmEvaluationPipeline {
     private final ReactiveEventQueue reactiveEventQueue;
     private final AlarmEvaluator evaluator;
     private final WebsocketBroadcastService websocketBroadcastService;
+    private final AlarmHistoryWriter historyWriter;
 
     @PostConstruct
     public void start() {
@@ -73,19 +74,44 @@ public class AlarmEvaluationPipeline {
     }
 
     /**
-     * 발생 알람을 {@link EventHistoryDto}(eventType="ALARM") 로 감싸 기존 이벤트 싱크로 emit 한다.
-     * 기존 FIRE_BELL 과 동일한 싱크를 공유하므로 WebSocket 전송·스냅샷 저장으로 자동 전파된다.
+     * 발생 알람을 처리한다.
+     * <ol>
+     *   <li>정본(tbl_alarm_history) INSERT → 생성된 alarm_id(=단일 eventId)를 알람에 세팅</li>
+     *   <li>서버 사이드 채널(SMS 등) 디스패치(현재 슬롯)</li>
+     *   <li>{@link EventHistoryDto}(eventType="ALARM")로 감싸 기존 이벤트 싱크로 emit
+     *       (FIRE_BELL 과 동일 싱크 공유 → WebSocket 전송). 스냅샷 파이프라인은 ALARM 을 skip 한다.</li>
+     * </ol>
+     * 정본 저장 실패 시 해당 알람은 발행하지 않는다(id 없는 알람 방지).
      */
     private Mono<Void> emit(AlarmEvent alarm) {
         if (alarm == null) return Mono.empty();
 
-        EventHistoryDto dto = EventHistoryDto.builder()
-                .eventId(Generators.timeBasedEpochGenerator().generate())
-                .eventType("ALARM")
-                .isProcessed(false)
-                .alarm(alarm)
-                .build();
+        return historyWriter.insert(alarm)
+                .flatMap(alarmId -> {
+                    AlarmEvent enriched = alarm.toBuilder().alarmId(alarmId).build();
 
-        return websocketBroadcastService.publish(dto);
+                    // 서버 사이드 출력 채널(SMS/BROADCAST/EMAIL) — 현재 슬롯(발송 연동 후속).
+                    dispatchServerChannels(enriched);
+
+                    EventHistoryDto dto = EventHistoryDto.builder()
+                            .eventId(Generators.timeBasedEpochGenerator().generate())
+                            .eventType("ALARM")
+                            .isProcessed(false)
+                            .alarm(enriched)
+                            .build();
+
+                    return websocketBroadcastService.publish(dto);
+                });
+    }
+
+    /**
+     * 서버 사이드 출력 채널 디스패치. 현재는 슬롯(로그만) — SMS 수신자 모델/게이트웨이 연동은 후속 Loop.
+     */
+    private void dispatchServerChannels(AlarmEvent alarm) {
+        if (alarm.outputs() == null) return;
+        if (alarm.outputs().smsEnabled()) {
+            log.info("[AlarmEvaluationPipeline] (슬롯) SMS 발송 대상 alarmId={}, policyId={} — 발송 연동 미구현",
+                    alarm.alarmId(), alarm.policyId());
+        }
     }
 }

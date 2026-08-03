@@ -6,6 +6,16 @@ package com.mpole.hana.digitaltwin.alarm.entity;
  * - DEVICE: 특정 단일 장비
  */
 public enum AlarmScope {
-    CATEGORY,
-    DEVICE
+    CATEGORY("카테고리"),
+    DEVICE("디바이스");
+
+    private final String description;
+
+    AlarmScope(String description) {
+        this.description = description;
+    }
+
+    public String getDescription() {
+        return description;
+    }
 }

@@ -1,13 +1,17 @@
 package com.mpole.hana.digitaltwin.alarm.entity;
 
+import com.mpole.hana.common.dto.OutputSpec;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 알람 정책의 심각도 등급 상세.
  * THRESHOLD 조건에서는 thresholdValue(AI 임계치)로 등급을 구분하며,
  * icon/effect/displayOrder 로 표현을 관리한다.
+ * outputs(JSONB): 이 등급 발생 시 켤 출력 채널 세트(NOTIFY/SOP/CCTV/SMS).
  */
 @Entity
 @Table(name = "tbl_alarm_policy_level")
@@ -40,4 +44,9 @@ public class AlarmPolicyLevel extends DateEntity {
     @Column(name = "display_order")
     @Builder.Default
     private int displayOrder = 0;
+
+    /** 이 등급 발생 시 켤 출력 채널 세트(NOTIFY/SOP/CCTV/SMS). 없으면 정책 레거시 displayType 폴백. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "outputs", columnDefinition = "jsonb")
+    private OutputSpec outputs;
 }
