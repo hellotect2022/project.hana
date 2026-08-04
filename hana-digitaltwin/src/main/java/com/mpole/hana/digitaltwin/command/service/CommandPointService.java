@@ -10,6 +10,8 @@ import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +57,13 @@ public class CommandPointService {
         return commandPointRepository.findByDevice_DeviceIdOrderBySortOrderAsc(deviceId).stream()
                 .map(CommandPointResponse::from)
                 .toList();
+    }
+
+    /** 제어 포인트 전체 페이지 조회(장비 선택 없이). keyword/categoryId 선택 필터. 정렬은 Pageable. */
+    @Transactional(readOnly = true)
+    public Page<CommandPointResponse> page(String keyword, Long categoryId, Pageable pageable) {
+        return commandPointRepository.search(keyword, categoryId, pageable)
+                .map(CommandPointResponse::from);
     }
 
     @Transactional(readOnly = true)

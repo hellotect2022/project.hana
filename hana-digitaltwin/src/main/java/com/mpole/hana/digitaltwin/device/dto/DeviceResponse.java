@@ -38,6 +38,7 @@ public record DeviceResponse(
      */
     public record CommandPointItem(
             Long commandPointId,
+            Long pointId,
             String label,
             String tagName,
             String onValue,

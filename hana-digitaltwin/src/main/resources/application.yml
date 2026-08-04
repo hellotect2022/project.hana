@@ -18,7 +18,7 @@ spring:
 
   datasource:
     main:
-      jdbc-url: jdbc:postgresql://192.168.250.181:5432/hdt?currentSchema=core&reWriteBatchedStatements=true
+      jdbc-url: jdbc:postgresql://192.168.250.88:5432/hdt?currentSchema=core&reWriteBatchedStatements=true
       #jdbc-url: jdbc:postgresql://192.168.250.249:5432/hdt?currentSchema=core2&reWriteBatchedStatements=true
       username: testuser
       password: 1q2w3e

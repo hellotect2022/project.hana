@@ -35,7 +35,7 @@ public class DeviceControlService {
             throw new IllegalArgumentException("commandPointId 는 필수입니다.");
         }
         if (req.value() == null || req.value().isBlank()) {
-            throw new IllegalArgumentException("value(on/off) 는 필수입니다.");
+            throw new IllegalArgumentException("value(1/0) 는 필수입니다.");
         }
 
         CommandPoint cmd = commandPointRepository.findById(req.commandPointId())
@@ -71,15 +71,16 @@ public class DeviceControlService {
                 : DeviceControlResponse.fail("외부 연계 전송 실패");
     }
 
+    /** 제어값 해석: "1"=ON, "0"=OFF. (관용: on/off 도 허용) */
     private boolean resolveOn(String value) {
         String v = value.trim();
-        if (v.equalsIgnoreCase("on")) {
+        if (v.equals("1") || v.equalsIgnoreCase("on")) {
             return true;
         }
-        if (v.equalsIgnoreCase("off")) {
+        if (v.equals("0") || v.equalsIgnoreCase("off")) {
             return false;
         }
-        throw new IllegalArgumentException("value 는 on/off 만 허용됩니다. value=" + value);
+        throw new IllegalArgumentException("value 는 1/0 만 허용됩니다. value=" + value);
     }
 
     private String currentActor() {

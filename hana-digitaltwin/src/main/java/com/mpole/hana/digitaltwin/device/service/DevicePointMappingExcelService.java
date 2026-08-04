@@ -4,6 +4,7 @@ import com.mpole.hana.digitaltwin.device.dto.DevicePointRefMappingRequest;
 import com.mpole.hana.digitaltwin.device.dto.PointMappingImportResult;
 import com.mpole.hana.digitaltwin.device.dto.PointMappingStatsResponse;
 import com.mpole.hana.digitaltwin.device.entity.Device;
+import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePoint;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,15 +41,20 @@ import java.util.Set;
 public class DevicePointMappingExcelService {
 
     private static final String COL_DEVICE_NAME = "장비명";
+    private static final String COL_DEVICE_DESC = "장비상세설명";
+    private static final String COL_CATEGORY = "카테고리";
     private static final String COL_TAG = "태그";
     private static final String COL_POINT_NAME = "포인트명";
     private static final String COL_POINT_KEY = "point_key";
+    private static final String COL_POINT_TYPE = "유형";
+    private static final String COL_UNIT = "단위";
     private static final String COL_REF_DEVICE_CODE = "ref_device_code";
     private static final String COL_REF_POINT_CODE = "ref_point_code";
 
+    // 업로드는 헤더 '이름'으로 컬럼을 찾으므로(추가 컬럼 무시) 표시용 컬럼을 늘려도 import 는 무영향.
     private static final String[] HEADERS = {
-            COL_DEVICE_NAME, COL_TAG, COL_POINT_NAME,
-            COL_POINT_KEY, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE
+            COL_DEVICE_NAME, COL_DEVICE_DESC, COL_CATEGORY, COL_TAG, COL_POINT_NAME,
+            COL_POINT_KEY, COL_POINT_TYPE, COL_UNIT, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE
     };
 
     private final DevicePointRepository devicePointRepository;
@@ -99,11 +105,15 @@ public class DevicePointMappingExcelService {
                 Device device = p.getDevice();
                 Row row = sheet.createRow(rowIdx++);
                 row.createCell(0).setCellValue(device != null ? nvl(device.getDeviceName()) : "");
-                row.createCell(1).setCellValue(nvl(p.getTagName()));
-                row.createCell(2).setCellValue(nvl(p.getPointName()));
-                row.createCell(3).setCellValue(nvl(p.getPointKey()));
-                row.createCell(4).setCellValue(nvl(p.getRefDeviceCode()));
-                row.createCell(5).setCellValue(nvl(p.getRefPointCode()));
+                row.createCell(1).setCellValue(device != null ? nvl(device.getDescription()) : "");
+                row.createCell(2).setCellValue(categoryPath(device));
+                row.createCell(3).setCellValue(nvl(p.getTagName()));
+                row.createCell(4).setCellValue(nvl(p.getPointName()));
+                row.createCell(5).setCellValue(nvl(p.getPointKey()));
+                row.createCell(6).setCellValue(nvl(p.getPointType()));
+                row.createCell(7).setCellValue(nvl(p.getUnit()));
+                row.createCell(8).setCellValue(nvl(p.getRefDeviceCode()));
+                row.createCell(9).setCellValue(nvl(p.getRefPointCode()));
             }
 
             for (int i = 0; i < HEADERS.length; i++) {
@@ -313,6 +323,23 @@ public class DevicePointMappingExcelService {
 
     private static String nvl(String value) {
         return value == null ? "" : value;
+    }
+
+    /** 장비 카테고리 경로("대 > 중 > 소"). 부모 체인을 거슬러 조립(readOnly 트랜잭션 내 lazy 로딩). */
+    private static String categoryPath(Device device) {
+        if (device == null || device.getCategory() == null) {
+            return "";
+        }
+        java.util.Deque<String> parts = new java.util.ArrayDeque<>();
+        DeviceCategory cur = device.getCategory();
+        int guard = 0;
+        while (cur != null && guard++ < 8) {
+            if (cur.getCategoryName() != null) {
+                parts.addFirst(cur.getCategoryName());
+            }
+            cur = cur.getParent();
+        }
+        return String.join(" > ", parts);
     }
 
     private record ParsedRow(

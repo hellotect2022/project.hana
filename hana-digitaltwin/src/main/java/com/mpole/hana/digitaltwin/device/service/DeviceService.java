@@ -214,6 +214,7 @@ public class DeviceService {
                         cp -> cp.getDevice().getDeviceId(),
                         Collectors.mapping(cp -> new DeviceResponse.CommandPointItem(
                                 cp.getCommandPointId(),
+                                cp.getPoint() != null ? cp.getPoint().getPointId() : null,
                                 cp.getLabel(),
                                 cp.getPoint() != null ? cp.getPoint().getTagName() : null,
                                 cp.getOnValue(),
