@@ -37,16 +37,20 @@ public class DbViewReadService {
                     """
                         SELECT *
                         FROM vwDigitalTwin_02 WITH (NOLOCK)
-                        -- FROM bms_point_view
-                        WHERE update_datetime > :lastTime
-                        ORDER BY update_datetime ASC
+                        -- WHERE update_datetime > :lastTime
+                        ORDER BY update_datetime DESC
                     """
                 )
-                .bind("lastTime", lastUpdateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")))
+                //.bind("lastTime", lastUpdateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")))
                 .fetch()
                 .all()
                 .collectList()
-                .doOnSuccess(a -> log.info("0-1 데이타 가져오는데 걸리는 시간 : {}ms", System.currentTimeMillis() - collectTime.get()))
+                .doOnSuccess(a -> {
+                    if (!a.isEmpty()) {
+                        log.info("업데이트된 데이타 갯수 : {} 개",a.size());
+                    }
+                    log.info("0-1 데이타 가져오는데 걸리는 시간 : {}ms", System.currentTimeMillis() - collectTime.get());
+                })
                 .flatMapIterable(rows -> rows)
                 .map((row) -> {
                     Object rawValue = row.get("update_datetime");
@@ -84,8 +88,7 @@ public class DbViewReadService {
                                     .build()
                     );
                 })
-                .doOnComplete(() -> log.info("0-2.SiPointData 로 변환 시간 : {}ms",
-                        System.currentTimeMillis() - collectTime.get()))
+                .doOnComplete(() -> log.info("0-2.SiPointData 로 변환 시간 : {}ms", System.currentTimeMillis() - collectTime.get()))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .doOnComplete(() -> {

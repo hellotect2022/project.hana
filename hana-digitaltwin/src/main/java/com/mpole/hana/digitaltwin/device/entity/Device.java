@@ -35,6 +35,10 @@ public class Device extends DateEntity {
     @Column(name = "device_name")
     private String deviceName;
 
+    @Column(name = "device_display_name")
+    @Comment("장비 UI 표기명 — 비면 device_name 으로 폴백(프론트)")
+    private String deviceDisplayName;
+
     private Boolean active;
 
     private String description;
@@ -69,6 +73,23 @@ public class Device extends DateEntity {
     @Comment("장치 고유 속성")
     @Column(name = "property_info", columnDefinition = "jsonb")
     private DevicePropertyInfo propertyInfo;
+
+    @Column(name = "alarm_state", nullable = false)
+    @Comment("알람 마스터 스위치 — false 면 이 장비 알람을 client 로 발행하지 않음")
+    @Builder.Default
+    private boolean alarmState = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation_state", length = 32)
+    @Comment("동작상태(산정 로직 추후)")
+    @Builder.Default
+    private OperationState operationState = OperationState.UNKNOWN;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "connection_state", length = 32)
+    @Comment("연결상태(산정 로직 추후)")
+    @Builder.Default
+    private ConnectionState connectionState = ConnectionState.UNKNOWN;
 
     public void clearPlacement() {
         this.placement = null;

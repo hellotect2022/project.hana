@@ -2,7 +2,7 @@ package com.mpole.hana.digitaltwin.device.service;
 
 import com.mpole.hana.digitaltwin.command.repository.CommandPointRepository;
 import com.mpole.hana.digitaltwin.device.dto.BulkActiveRequest;
-import com.mpole.hana.digitaltwin.device.dto.CctvInfoProjection;
+import com.mpole.hana.digitaltwin.device.dto.CctvCameraResponse;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingItemResponse;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingPageResponse;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointRefMappingRequest;
@@ -69,8 +69,7 @@ public class DeviceService {
             JsonNode template;
             try {
                 // 폴리모픽 변환: {type:X} → 해당 property 클래스 인스턴스 → 직렬화(모든 필드 null 스켈레톤)
-                DevicePropertyInfo inst = objectMapper.convertValue(
-                        java.util.Map.of("type", v.getJsonName()), DevicePropertyInfo.class);
+                DevicePropertyInfo inst = objectMapper.convertValue(Map.of("type", v.getJsonName()), DevicePropertyInfo.class);
                 template = objectMapper.valueToTree(inst);
             } catch (Exception e) {
                 template = objectMapper.createObjectNode().put("type", v.getJsonName());
@@ -88,6 +87,7 @@ public class DeviceService {
 
         Device device = Device.builder()
                 .deviceName(request.deviceName())
+                .deviceDisplayName(request.deviceDisplayName())
                 .deviceKey(request.deviceKey())
                 .active(request.active())
                 .description(request.description())
@@ -308,16 +308,8 @@ public class DeviceService {
                 );
             }
 
-            if (refDeviceCode != null) {
-                boolean duplicate = devicePointRepository
-                        .findByRefDeviceCodeAndRefPointCodeAndPointIdNot(refDeviceCode, refPointCode, point.getPointId())
-                        .isPresent();
-                if (duplicate) {
-                    throw new IllegalStateException(
-                            "이미 다른 포인트에 연결된 SI 매핑입니다: " + refDeviceCode + ":" + refPointCode
-                    );
-                }
-            }
+            // 1:N 팬아웃 허용 — 같은 (ref_device_code, ref_point_code) 를 여러 point 가 가질 수 있으므로
+            // 조합 중복 거부 규칙 제거. (both-or-neither 만 유지)
 
             point.setRefDeviceCode(refDeviceCode);
             point.setRefPointCode(refPointCode);
@@ -438,6 +430,9 @@ public class DeviceService {
         if (request.deviceName() != null) {
             device.setDeviceName(request.deviceName());
         }
+        if (request.deviceDisplayName() != null) {
+            device.setDeviceDisplayName(request.deviceDisplayName());
+        }
         if (request.description() != null) {
             device.setDescription(request.description());
         }
@@ -461,6 +456,17 @@ public class DeviceService {
                 validatePropertyType(device.getCategory(), request.propertyInfo());
             }
             device.setPropertyInfo(request.propertyInfo());
+        }
+
+        // 상태값 갱신(제공된 경우만). alarm_state=false 면 hana-event 평가기가 알람 억제(캐시 반영 지연 존재).
+        if (request.alarmState() != null) {
+            device.setAlarmState(request.alarmState());
+        }
+        if (request.operationState() != null) {
+            device.setOperationState(request.operationState());
+        }
+        if (request.connectionState() != null) {
+            device.setConnectionState(request.connectionState());
         }
 
         // 3D 에셋은 카테고리(defaultAsset) 기준으로 렌더한다.
@@ -563,13 +569,17 @@ public class DeviceService {
     }
 
     @Transactional(readOnly = true)
-    public List<CctvInfoProjection> getCctvDeviceMapping(Long deviceId) {
-        return deviceCctvMappingRepository.findByDeviceId(deviceId);
+    public List<CctvCameraResponse> getCctvDeviceMapping(Long deviceId) {
+        return deviceCctvMappingRepository.findByDeviceId(deviceId).stream()
+                .map(CctvCameraResponse::from)
+                .toList();
     }
 
     /** CCTV 매핑 피커용 — property_info.type 이 CCTV 인 장비 후보 전체. */
     @Transactional(readOnly = true)
-    public List<CctvInfoProjection> getCctvCandidates() {
-        return deviceCctvMappingRepository.findCctvCandidates(DevicePropertyType.CCTV.getJsonName());
+    public List<CctvCameraResponse> getCctvCandidates() {
+        return deviceCctvMappingRepository.findCctvCandidates(DevicePropertyType.CCTV.getJsonName()).stream()
+                .map(CctvCameraResponse::from)
+                .toList();
     }
 }

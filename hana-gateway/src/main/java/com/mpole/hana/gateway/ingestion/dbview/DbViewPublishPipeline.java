@@ -1,5 +1,6 @@
 package com.mpole.hana.gateway.ingestion.dbview;
 
+import com.mpole.hana.common.dto.XnPointData;
 import com.mpole.hana.gateway.config.properties.HdtPollingProperties;
 import com.mpole.hana.gateway.pubsub.kafka.KafkaMessagePublisher;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import reactor.core.scheduler.Schedulers;
 import reactor.kafka.sender.SenderResult;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -24,6 +26,7 @@ public class DbViewPublishPipeline {
 
     private final HdtPollingProperties pollingProperties;
     private final DbViewReadService readService;
+    private final DbViewChangeFilter changeFilter;
     private final DbViewBundleService bundleService;
     private final KafkaMessagePublisher kafkaPublisher;
 
@@ -47,7 +50,13 @@ public class DbViewPublishPipeline {
                     .flatMapMany(list -> {
                         //log.info("번들링 시작 전 리스트 크기: {}", list.size());
                         //log.info("데이타 사이즈 : {}",list.toString().getBytes().length);
-                        return bundleService.bundle(Flux.fromIterable(list));
+                        // 1.5단계 변경 감지(delta) — 풀리드 결과에서 직전 폴링 대비 실제로 바뀐 포인트만 통과.
+                        //   뷰 update_datetime 이 단조증가하지 않아 워터마크 증분쿼리는 누락 발생 → 풀리드 유지 + 앱레벨 diff.
+                        //   value/alarmYn 변화만 통과(순수 timestamp touch 는 제외)하여 하류 부하를 실변경 수준으로 축소.
+                        List<XnPointData> changed = changeFilter.retainChanged(list);
+                        log.info("1.5 변경 감지: 전체 {}개 중 변경 {}개 통과 ({}ms)",
+                                list.size(), changed.size(), System.currentTimeMillis() - cycleStartMs.get());
+                        return bundleService.bundle(Flux.fromIterable(changed));
                     })
                     .doOnNext(b -> {
                         bundleCounter.incrementAndGet();

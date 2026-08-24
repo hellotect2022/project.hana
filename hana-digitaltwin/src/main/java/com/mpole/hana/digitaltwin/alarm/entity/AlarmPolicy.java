@@ -1,6 +1,5 @@
 package com.mpole.hana.digitaltwin.alarm.entity;
 
-import com.mpole.hana.digitaltwin.event.entity.EventDisplayType;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -59,18 +58,6 @@ public class AlarmPolicy extends DateEntity {
 
     @Column(name = "trigger_value")
     private String triggerValue;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "display_type")
-    @Builder.Default
-    private EventDisplayType displayType = EventDisplayType.SIMPLE;
-
-    @Column(name = "sop_template_id")
-    private Long sopTemplateId;
-
-    @Column(name = "effect_enabled")
-    @Builder.Default
-    private boolean effectEnabled = false;
 
     @Column(name = "sustain_sec")
     @Builder.Default

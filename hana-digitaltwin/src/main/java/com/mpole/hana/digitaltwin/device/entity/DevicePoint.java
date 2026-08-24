@@ -10,8 +10,9 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "tbl_device_point",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_point_ref", columnNames = {"ref_device_code", "ref_point_code"}),
-                @UniqueConstraint(name = "uk_point_key", columnNames = {"point_key"}),
+                // uk_point_ref 제거: 하나의 외부신호(ref_device_code, ref_point_code)를 여러 device_point 로
+                // 팬아웃(1:N)하기 위해 조합 유니크 해제. point_key 유니크는 유지.
+                //@UniqueConstraint(name = "uk_point_key", columnNames = {"point_key"}),
         }
 )
 @Getter

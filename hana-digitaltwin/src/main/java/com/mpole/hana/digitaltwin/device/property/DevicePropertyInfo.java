@@ -18,6 +18,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
         @JsonSubTypes.Type(value = GenericDeviceProperty.class, name = "GENERIC")
 })
 
-public sealed interface DevicePropertyInfo permits CctvProperty, ChillerProperty, GatewayProperty, GenericDeviceProperty  {
+public sealed interface DevicePropertyInfo
+        permits CctvProperty, ChillerProperty, GatewayProperty, GenericDeviceProperty,
+                CctvPropertyResponse {
     DevicePropertyType propertyType();
 }

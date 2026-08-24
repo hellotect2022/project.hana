@@ -58,6 +58,9 @@ public class AlarmEvaluator {
             Long deviceId = point.deviceId() != null ? point.deviceId() : bundle.deviceId();
             if (tagName == null || deviceId == null) continue;
 
+            // 장비 알람 마스터 스위치: alarm_state=false 면 정책 매칭 이전에 그 장비 알람 억제
+            if (!idx.alarmEnabled(deviceId)) continue;
+
             // 우선순위: (device, tag) 개별 정책이 있으면 그것만 적용(카테고리 override),
             // 없으면 그 디바이스 소분류의 카테고리 정책을 상속. 태그별로 독립 해석.
             List<PolicyView> matched = new ArrayList<>(idx.devicePolicies(deviceId, tagName));
@@ -153,12 +156,9 @@ public class AlarmEvaluator {
                 .thresholdValue(thresholdOfChosen)
                 .operator(policy.operator())
                 .triggerValue(policy.triggerValue())
-                .displayType(policy.displayType())
-                .sopTemplateId(policy.sopTemplateId())
                 .outputs(chosen.outputs())
                 .icon(chosen.icon())
                 .effect(chosen.effect())
-                .effectEnabled(policy.effectEnabled())
                 .occurredAt(now)
                 .build();
     }

@@ -39,7 +39,8 @@ public class AlarmPolicyLevel extends DateEntity {
 
     private String icon;
 
-    private String effect;
+    @Enumerated(EnumType.STRING)
+    private AlarmEffect effect;
 
     @Column(name = "display_order")
     @Builder.Default

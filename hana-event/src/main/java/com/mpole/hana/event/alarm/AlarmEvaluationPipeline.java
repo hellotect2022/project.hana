@@ -86,7 +86,8 @@ public class AlarmEvaluationPipeline {
     private Mono<Void> emit(AlarmEvent alarm) {
         if (alarm == null) return Mono.empty();
 
-        return historyWriter.insert(alarm)
+        return historyWriter
+                .insert(alarm) // DB 에 INSERT 한다ㅏ.
                 .flatMap(alarmId -> {
                     AlarmEvent enriched = alarm.toBuilder().alarmId(alarmId).build();
 

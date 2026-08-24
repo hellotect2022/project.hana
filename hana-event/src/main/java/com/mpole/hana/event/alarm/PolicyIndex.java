@@ -22,11 +22,12 @@ import java.util.Map;
 public record PolicyIndex(
         Map<String, List<PolicyView>> categoryIndex,
         Map<String, List<PolicyView>> deviceIndex,
-        Map<Long, Long> deviceCategoryMap
+        Map<Long, Long> deviceCategoryMap,
+        Map<Long, Boolean> deviceAlarmEnabled   // deviceId → alarm_state(마스터 스위치). 없으면 true 취급
 ) {
 
     private static final PolicyIndex EMPTY =
-            new PolicyIndex(Map.of(), Map.of(), Map.of());
+            new PolicyIndex(Map.of(), Map.of(), Map.of(), Map.of());
 
     /**
      * 초기 로드 이전(캐시 미준비) 안전값. 매칭 0 을 보장한다.
@@ -53,5 +54,10 @@ public record PolicyIndex(
 
     public Long smallCategoryOf(Long deviceId) {
         return deviceCategoryMap.get(deviceId);
+    }
+
+    /** 장비 알람 마스터 스위치. 값 없으면(미로딩/미지정) 기본 true(허용). false 면 그 장비 알람 억제. */
+    public boolean alarmEnabled(Long deviceId) {
+        return deviceAlarmEnabled.getOrDefault(deviceId, Boolean.TRUE);
     }
 }

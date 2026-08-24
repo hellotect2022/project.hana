@@ -94,6 +94,10 @@ public class SystemDiagramService {
         // devices / wirings 전체 교체 (orphanRemoval 로 기존 하위 삭제)
         diagram.clearDevices();
         diagram.clearWirings();
+        // JPA(Hibernate)는 트랜잭션이 끝나거나 flush될 때 INSERT -> UPDATE -> DELETE 순서로 SQL을 실행하는 기본 전략을 가집니다.
+        // 아래 코드가 없으면 새로운값을 insert 를 먼저 하게 됨
+        systemDiagramRepository.flush(); // 또는 entityManager.flush();
+
         applyChildren(diagram, master, req);
 
         SystemDiagram saved = systemDiagramRepository.save(diagram);

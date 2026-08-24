@@ -42,6 +42,7 @@ public class EventService {
                             .build());
                 })
                 .flatMap(websocketBroadcastService::publish)
-                .subscribe();
+                //.subscribe()
+        ;
     }
 }

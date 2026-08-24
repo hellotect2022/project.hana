@@ -130,3 +130,24 @@ hdt:
         command: /api/device/command
       timeout-ms: 3000
       token-response-field: accessToken
+    hqs:
+      base-url: http://192.168.10.218:8000
+      paths:
+        wc-button: /api/v1/wc/button          # 화장실 무선버튼(EnOcean) 이벤트 전송 경로
+      timeout-ms: 3000
+      vacancy-timeout-ms: 60000               # 재실→퇴실 가정 임계(sweep). 원본 10s→60s 상향(정지 재실자 오탈락 방지)
+      sweep-interval-ms: 5000                 # 퇴실 sweep 스케줄 주기
+    emblaze:
+      enabled: true                          # true 여야 RabbitMQ 수신 config/listener 기동. 실브로커 접속정보 확인 후 전환
+      rabbit:
+        host: 127.0.0.1                       # 원본 테스트값 — 실브로커 host 로 교체 필요
+        monitoring:                           # web은 15672 / AMQP 45672 (AMQPS면 35672+SSL)
+          port: 45672
+          username: LS-DX-TEST-1
+          password: 9325eeb1a0d79c18dcb6c5b855924b2b08644a214337bb04043447edc371f3df
+          virtual-host: /
+        control:
+          port: 45673
+          username: LS-DX-TEST-1
+          password: 9325eeb1a0d79c18dcb6c5b855924b2b08644a214337bb04043447edc371f3df
+          virtual-host: /

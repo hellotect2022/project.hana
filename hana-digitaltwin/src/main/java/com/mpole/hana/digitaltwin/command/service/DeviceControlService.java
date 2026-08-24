@@ -3,6 +3,7 @@ package com.mpole.hana.digitaltwin.command.service;
 import com.mpole.hana.digitaltwin.command.dto.DeviceControlRequest;
 import com.mpole.hana.digitaltwin.command.dto.DeviceControlResponse;
 import com.mpole.hana.digitaltwin.command.entity.CommandPoint;
+import com.mpole.hana.digitaltwin.command.exception.DeviceControlException;
 import com.mpole.hana.digitaltwin.command.port.DeviceControlPort;
 import com.mpole.hana.digitaltwin.command.repository.CommandPointRepository;
 import com.mpole.hana.digitaltwin.device.entity.DevicePoint;
@@ -66,9 +67,13 @@ public class DeviceControlService {
                 currentActor(), cmd.getCommandPointId(), refDeviceCode, refPointCode,
                 on ? "ON" : "OFF", sendValue, success ? "SUCCESS" : "FAIL");
 
-        return success
-                ? DeviceControlResponse.ok((on ? "ON" : "OFF") + " 명령 전송 완료")
-                : DeviceControlResponse.fail("외부 연계 전송 실패");
+        // 외부 연계 실패 시 예외로 전파 → GlobalExceptionHandler 가 502 + DEVICE_CONTROL_FAILED 로 응답 자체를 실패 처리
+        if (!success) {
+            throw new DeviceControlException(String.format(
+                    "제어 API 호출 실패 [디바이스제어] commandPointId=%d, deviceCode=%s, pointCode=%s",
+                    cmd.getCommandPointId(), refDeviceCode, refPointCode));
+        }
+        return DeviceControlResponse.ok((on ? "ON" : "OFF") + " 명령 전송 완료");
     }
 
     /** 제어값 해석: "1"=ON, "0"=OFF. (관용: on/off 도 허용) */

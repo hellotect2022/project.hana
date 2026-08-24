@@ -1,12 +1,16 @@
 package com.mpole.hana.digitaltwin.device.dto;
 
+import com.mpole.hana.digitaltwin.device.entity.ConnectionState;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePlacement;
+import com.mpole.hana.digitaltwin.device.entity.OperationState;
 import com.mpole.hana.digitaltwin.realtime.dto.DeviceRealtimeResponse;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
+import com.mpole.hana.digitaltwin.device.property.CctvProperty;
+import com.mpole.hana.digitaltwin.device.property.CctvPropertyResponse;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -15,6 +19,7 @@ import java.util.List;
 public record DeviceResponse(
         Long deviceId,
         String deviceName,
+        String deviceDisplayName,
         String description,
         Boolean active,
         Long categoryId,
@@ -29,7 +34,10 @@ public record DeviceResponse(
         OffsetDateTime updatedAt,
         DevicePropertyInfo propertyInfo,
         DeviceRealtimeResponse currentValue,
-        List<CommandPointItem> commandPoints
+        List<CommandPointItem> commandPoints,
+        boolean alarmState,
+        OperationState operationState,
+        ConnectionState connectionState
 ) {
     /**
      * 디바이스 목록/상세에 임베드되는 제어 포인트 요약.
@@ -58,9 +66,14 @@ public record DeviceResponse(
         DevicePlacement p = d.getPlacement();
         DeviceCurrentValue c = d.getDeviceCurrentValue();
 
+        // property_info: CCTV 는 응답에서만 stream_url 을 계산해 포함(미저장, 타입은 DevicePropertyInfo 유지).
+        DevicePropertyInfo pi = d.getPropertyInfo();
+        DevicePropertyInfo propertyInfoOut = (pi instanceof CctvProperty cp) ? CctvPropertyResponse.from(cp) : pi;
+
         return new DeviceResponse(
                 d.getDeviceId(),
                 d.getDeviceName(),
+                d.getDeviceDisplayName(),
                 d.getDescription(),
                 d.getActive(),
                 cat != null ? cat.getCategoryId() : null,
@@ -73,9 +86,12 @@ public record DeviceResponse(
                 p != null && p.isPlaced(),
                 d.getCreatedAt(),
                 d.getUpdatedAt()
-                ,d.getPropertyInfo()
+                , propertyInfoOut
                 , DeviceRealtimeResponse.from(c)
                 , commandPoints != null ? commandPoints : List.of()
+                , d.isAlarmState()
+                , d.getOperationState()
+                , d.getConnectionState()
         );
     }
 

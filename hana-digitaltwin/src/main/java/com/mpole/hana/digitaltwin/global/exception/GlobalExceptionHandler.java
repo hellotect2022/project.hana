@@ -1,7 +1,9 @@
 package com.mpole.hana.digitaltwin.global.exception;
 
+import com.mpole.hana.digitaltwin.command.exception.DeviceControlException;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import io.jsonwebtoken.ExpiredJwtException;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -69,6 +71,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage(), "INVALID_REQUEST"));
     }
 
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEntityNotFoundException(EntityNotFoundException e) {
+        log.warn("잘못된 요청: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage(), "INVALID_REQUEST"));
+    }
+
     /**
      * 요청 본문 파싱 실패(잘못된 JSON, 알 수 없는 componentType/enum 등). 400으로 사유와 함께 안내.
      */
@@ -88,6 +98,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(e.getMessage(), "INVALID_STATE"));
+    }
+
+    /**
+     * 디바이스 제어 명령이 외부(XN) 연계로 중계되지 못함. 502(BAD_GATEWAY) + DEVICE_CONTROL_FAILED 로
+     * 최종 API 응답 자체를 실패(success=false)로 내려 프론트가 외부 연계 이상으로 분기할 수 있게 한다.
+     */
+    @ExceptionHandler(DeviceControlException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDeviceControlException(DeviceControlException e) {
+        log.warn("디바이스 제어 외부 연계 실패: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error(e.getMessage(), "DEVICE_CONTROL_FAILED"));
     }
 
     @ExceptionHandler(Exception.class)

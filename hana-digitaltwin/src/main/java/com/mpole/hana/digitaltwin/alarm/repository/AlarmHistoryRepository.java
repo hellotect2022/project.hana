@@ -17,10 +17,10 @@ public interface AlarmHistoryRepository extends JpaRepository<AlarmHistory, Long
      */
     @Query("""
             SELECT h FROM AlarmHistory h
-            WHERE (:level IS NULL OR h.level = :level)
-              AND (:deviceId IS NULL OR h.deviceId = :deviceId)
-              AND (:from IS NULL OR h.occurredAt >= :from)
-              AND (:to IS NULL OR h.occurredAt <= :to)
+            WHERE (CAST(:level AS string) IS NULL OR h.level = :level)
+              AND (CAST(:deviceId AS long) IS NULL OR h.deviceId = :deviceId)
+              AND (CAST(:from AS timestamp) IS NULL OR h.occurredAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR h.occurredAt <= :to)
             """)
     Page<AlarmHistory> findByOptionalFilters(
             @Param("level") String level,

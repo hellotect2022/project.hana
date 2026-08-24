@@ -27,8 +27,8 @@ public class DbViewBundleService {
                     Map<Long, List<XnPointData>> grouped = allData
                             .parallelStream()
                             .<XnPointData>mapMulti((raw, consumer) -> {
-                                var meta = initDevicePointDataService.getPoint(raw.deviceCode() + ":" + raw.pointCode());
-                                if (meta != null) {
+                                // 1:N 팬아웃 — 하나의 신호(deviceCode:pointCode)가 여러 device_point 로 방출.
+                                for (var meta : initDevicePointDataService.getPoints(raw.deviceCode() + ":" + raw.pointCode())) {
                                     consumer.accept(
                                             raw.toBuilder()
                                                     .pointkey(meta.pointKey())
@@ -55,6 +55,8 @@ public class DbViewBundleService {
 //                                .build();
 //                    }).toList();
 
+                    log.info(" - 순수 번들링 갯수: {} 개", grouped.size());
+                    log.debug(" - 순수 번들링 데이타: {} ", grouped);
                     log.info(" - 순수 번들링 가공 소요 시간: {}ms", System.currentTimeMillis() - start);
                     return Flux.fromIterable(grouped.entrySet()).map(entry -> {
                         List<XnPointData> points = entry.getValue();

@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -75,7 +76,7 @@ public class AlarmHistoryService {
                 .orElseThrow(() -> new IllegalArgumentException("알람 이력을 찾을 수 없습니다. id=" + alarmId));
 
         OutputSpec out = h.getOutputs();
-        List<String> channels = (out != null) ? out.displayChannels() : legacyChannels(h);
+        List<String> channels = (out != null) ? out.displayChannels() : Collections.emptyList();
 
         EventDisplayResponse.SopPart sop = buildSop(alarmId, h, out);
         EventDisplayResponse.CctvPart cctv = buildCctv(h, out);
@@ -84,17 +85,16 @@ public class AlarmHistoryService {
     }
 
     /** outputs 없는 레거시 이벤트의 표시 채널: NOTIFY 항상 + displayType==SOP 이면 SOP. */
-    private List<String> legacyChannels(AlarmHistory h) {
-        List<String> ch = new ArrayList<>();
-        ch.add("NOTIFY");
-        if ("SOP".equals(h.getDisplayType())) ch.add("SOP");
-        return ch;
-    }
+//    private List<String> legacyChannels(AlarmHistory h) {
+//        List<String> ch = new ArrayList<>();
+//        ch.add("NOTIFY");
+//        if ("SOP".equals(h.getDisplayType())) ch.add("SOP");
+//        return ch;
+//    }
 
     private EventDisplayResponse.SopPart buildSop(Long alarmId, AlarmHistory h, OutputSpec out) {
-        boolean sopOn = (out != null) ? out.sopEnabled() : "SOP".equals(h.getDisplayType());
-        Long templateId = (out != null && out.sop() != null && out.sop().templateId() != null)
-                ? out.sop().templateId() : h.getSopTemplateId();
+        boolean sopOn = out != null && out.sopEnabled();
+        Long templateId = (out != null && out.sop() != null) ? out.sop().templateId() : null;
         if (!sopOn || templateId == null) {
             return null;
         }

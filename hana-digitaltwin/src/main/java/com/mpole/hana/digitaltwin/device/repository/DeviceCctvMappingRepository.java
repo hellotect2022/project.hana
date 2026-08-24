@@ -17,6 +17,7 @@ public interface DeviceCctvMappingRepository extends JpaRepository<DeviceCctvMap
             SELECT
                cctv.deviceId AS deviceId,
                cctv.deviceName AS deviceName,
+               cctv.deviceDisplayName AS deviceDisplayName,
                cctv.propertyInfo AS deviceProperty,
                f.floorId AS floorId,
                f.floorName AS floorName
@@ -39,6 +40,7 @@ public interface DeviceCctvMappingRepository extends JpaRepository<DeviceCctvMap
             SELECT
                cctv.deviceId AS deviceId,
                cctv.deviceName AS deviceName,
+               cctv.deviceDisplayName AS deviceDisplayName,
                cctv.propertyInfo AS deviceProperty,
                f.floorId AS floorId,
                f.floorName AS floorName

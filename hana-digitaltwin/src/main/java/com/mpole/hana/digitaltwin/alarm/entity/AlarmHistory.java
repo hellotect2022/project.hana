@@ -84,12 +84,6 @@ public class AlarmHistory extends DateEntity {
     @Column(name = "trigger_value")
     private String triggerValue;
 
-    @Column(name = "display_type")
-    private String displayType;
-
-    @Column(name = "sop_template_id")
-    private Long sopTemplateId;
-
     /** 발생 레벨의 출력 채널 세트 스냅샷(NOTIFY/SOP/CCTV/SMS). 조립 API가 이 값으로 SOP/CCTV 표출 결정. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "outputs", columnDefinition = "jsonb")
@@ -98,11 +92,9 @@ public class AlarmHistory extends DateEntity {
     @Column(name = "icon")
     private String icon;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "effect")
-    private String effect;
-
-    @Column(name = "effect_enabled")
-    private boolean effectEnabled;
+    private AlarmEffect effect;
 
     @Column(name = "occurred_at")
     private OffsetDateTime occurredAt;

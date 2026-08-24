@@ -128,10 +128,11 @@ public class AlarmPolicyCache {
         Mono<Map<Long, List<LevelRow>>> levelsMono = reader.loadLevelsByPolicyId();
         Mono<Map<Long, Long>> deviceCatMono = reader.loadDeviceCategoryMap();
         Mono<List<CategoryRow>> treeMono = reader.loadCategoryTree().collectList();
+        Mono<Map<Long, Boolean>> alarmEnabledMono = reader.loadDeviceAlarmEnabled();
 
-        // Mono.zip: 4개 쿼리를 병렬로 실행하고 모두 완료되면 하나로 합친다.
-        return Mono.zip(policiesMono, levelsMono, deviceCatMono, treeMono)
-                .map(t -> buildIndex(t.getT1(), t.getT2(), t.getT3(), t.getT4()))
+        // Mono.zip: 5개 쿼리를 병렬로 실행하고 모두 완료되면 하나로 합친다.
+        return Mono.zip(policiesMono, levelsMono, deviceCatMono, treeMono, alarmEnabledMono)
+                .map(t -> buildIndex(t.getT1(), t.getT2(), t.getT3(), t.getT4(), t.getT5()))
                 .doOnNext(newIndex -> {
                     // 원자적 publish: buildIndex 가 완성한 불변 인덱스를 volatile 한 번에 대입.
                     // 평가 스레드는 항상 "이전 완성본" 또는 "새 완성본"만 보고, 반쯤 만들어진 상태는 못 본다.
@@ -150,7 +151,8 @@ public class AlarmPolicyCache {
     private PolicyIndex buildIndex(List<PolicyRow> policies,
                                    Map<Long, List<LevelRow>> levelsByPolicy,
                                    Map<Long, Long> deviceCategoryMap,
-                                   List<CategoryRow> categories) {
+                                   List<CategoryRow> categories,
+                                   Map<Long, Boolean> deviceAlarmEnabled) {
 
         // ── 1단계: 카테고리 트리를 조회용 자료구조로 변환 ──
         // childrenByParent: 부모 id → 자식 id 목록 (서브트리 DFS 전개에 사용)
@@ -206,7 +208,8 @@ public class AlarmPolicyCache {
         return new PolicyIndex(
                 Map.copyOf(categoryIndex),
                 Map.copyOf(deviceIndex),
-                Map.copyOf(deviceCategoryMap)
+                Map.copyOf(deviceCategoryMap),
+                Map.copyOf(deviceAlarmEnabled)
         );
     }
 
@@ -265,9 +268,6 @@ public class AlarmPolicyCache {
                 p.conditionKind(),
                 p.operator(),
                 p.triggerValue(),
-                p.displayType(),
-                p.sopTemplateId(),
-                p.effectEnabled(),
                 p.sustainSec(),
                 p.cooldownSec(),
                 levelViews

@@ -21,9 +21,6 @@ public record PolicyView(
         String conditionKind,  // THRESHOLD / TOGGLE
         String operator,       // GTE / LTE / GT / LT (nullable)
         String triggerValue,   // TOGGLE 트리거값(nullable)
-        String displayType,    // SIMPLE / SOP
-        Long sopTemplateId,
-        boolean effectEnabled,
         int sustainSec,
         int cooldownSec,
         List<PolicyLevelView> levels

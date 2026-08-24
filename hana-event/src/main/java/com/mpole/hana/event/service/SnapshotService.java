@@ -29,14 +29,13 @@ public class SnapshotService {
 
     @PostConstruct
     public void startSnapshotPipeline() {
-        //centralSink.asFlux()
         reactiveEventQueue.getDeviceRawFlux()
                 .publishOn(Schedulers.newParallel("snapshot-thread"))
                 .flatMap(bundles->{
                     log.info("snapshot 용으로 수신하는 flux 데이타 {}",bundles.size());
                     return upsertBulk(bundles);
                 })
-                .subscribe()
+                //.subscribe()
         ;
     }
 

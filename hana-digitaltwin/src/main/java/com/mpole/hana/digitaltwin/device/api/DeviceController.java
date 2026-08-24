@@ -5,6 +5,7 @@ import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
 import com.mpole.hana.digitaltwin.device.service.DevicePlacementService;
 import com.mpole.hana.digitaltwin.device.service.DevicePointMappingExcelService;
+import com.mpole.hana.digitaltwin.device.service.DeviceExcelService;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import com.mpole.hana.digitaltwin.location.dto.UnityLocationResponse;
@@ -49,6 +50,7 @@ public class DeviceController {
     private final DeviceCategoryService deviceCategoryService;
     private final DevicePlacementService devicePlacementService;
     private final DevicePointMappingExcelService devicePointMappingExcelService;
+    private final DeviceExcelService deviceExcelService;
     private final LocationService locationService;
 
     //region swagger 🔄 장비 및 포인트 저장 명세서
@@ -178,6 +180,31 @@ public class DeviceController {
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"point-mapping-template.xlsx\"; filename*=UTF-8''" + filename)
+                .body(body);
+    }
+
+    @Operation(
+            summary = "장비 목록 엑셀 다운로드",
+            description = "장비관리 목록을 xlsx 로 다운로드한다. 컬럼: 장비이름 / 표시명 / 설명 / 카테고리(경로) / 3D에셋명. "
+                    + "categoryId·keyword 로 현재 화면 필터와 동일 범위로 내려받는다.",
+            parameters = {
+                    @Parameter(name = "categoryId", description = "카테고리 ID 필터", required = false),
+                    @Parameter(name = "keyword", description = "검색 키워드(장비이름/카테고리/키)", required = false)
+            }
+    )
+    @GetMapping("/excel")
+    public ResponseEntity<byte[]> downloadDeviceListExcel(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String keyword
+    ) {
+        byte[] body = deviceExcelService.buildDeviceListExcel(categoryId, keyword);
+        String filename = URLEncoder.encode("device-list.xlsx", StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"device-list.xlsx\"; filename*=UTF-8''" + filename)
                 .body(body);
     }
 
@@ -370,15 +397,15 @@ public class DeviceController {
     }
 
     @GetMapping("/{deviceId}/cctv-mapping")
-    public ResponseEntity<ApiResponse<List<CctvInfoProjection>>> getCctvMapping(
+    public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvMapping(
             @PathVariable Long deviceId) {
-        List<CctvInfoProjection> list = deviceService.getCctvDeviceMapping(deviceId);
+        List<CctvCameraResponse> list = deviceService.getCctvDeviceMapping(deviceId);
         return ResponseEntity.ok(ApiResponse.success("장비 주변 CCTV 매핑 조회", list));
     }
 
     @GetMapping("/cctv-candidates")
-    public ResponseEntity<ApiResponse<List<CctvInfoProjection>>> getCctvCandidates() {
-        List<CctvInfoProjection> list = deviceService.getCctvCandidates();
+    public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvCandidates() {
+        List<CctvCameraResponse> list = deviceService.getCctvCandidates();
         return ResponseEntity.ok(ApiResponse.success("CCTV 매핑 후보 목록", list));
     }
 

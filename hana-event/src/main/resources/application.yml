@@ -5,8 +5,8 @@ server:
 storage:
   postgres:
     driver: "postgresql"
-    #host: 192.168.250.88
-    host: 192.168.250.181
+    host: 192.168.250.88
+    #host: 192.168.250.181
     #host: 192.168.250.249
     port: 5432
     user: testuser

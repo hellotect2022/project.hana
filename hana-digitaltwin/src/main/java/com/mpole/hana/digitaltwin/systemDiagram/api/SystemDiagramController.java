@@ -69,6 +69,7 @@ public class SystemDiagramController {
             description = "계통도 ID의 계통도를 수정합니다. 하위 장비/배선 목록은 전체 교체됩니다.",
             parameters = {@Parameter(name = "id", description = "계통도 ID", example = "1", required = true)}
     )
+
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<SystemDiagramResponse>> update(
             @PathVariable Long id,

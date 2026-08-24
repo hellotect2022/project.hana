@@ -20,22 +20,21 @@ import java.util.stream.Collectors;
 @Slf4j
 public class InitDevicePointDataService implements SmartLifecycle {
     private boolean running = false;
-    private final Map<String, DeviceRawPointData> pointMap = new ConcurrentHashMap<>();
+    // 1:N 팬아웃 — 하나의 외부신호(ref_device_code:ref_point_code)를 여러 device_point 가 공유할 수 있어
+    // 값이 단건이 아니라 List. (기존 toMap last-wins 는 중복 point 를 덮어써 유실시켰음)
+    private final Map<String, List<DeviceRawPointData>> pointMap = new ConcurrentHashMap<>();
     private final DatabaseClient postgresDatabaseClient;
     private final ObjectMapper objectMapper;
 
-    public DeviceRawPointData getPoint(String key) {
-        return pointMap.get(key);
+    public List<DeviceRawPointData> getPoints(String key) {
+        return pointMap.getOrDefault(key, List.of());
     }
 
     public Mono<Void> refreshCache() {
         return loadPoints().map(pointMetaData -> {
-            Map<String, DeviceRawPointData> newPointMap = pointMetaData.stream()
-                    .collect(Collectors.toConcurrentMap(
-                            p->p.deviceCode()+":"+p.pointCode(), // key mapper
-                            p -> p, // value mapper
-                            (existing, replacement) -> replacement
-                    ));
+            Map<String, List<DeviceRawPointData>> newPointMap = pointMetaData.stream()
+                    .collect(Collectors.groupingByConcurrent(
+                            p -> p.deviceCode() + ":" + p.pointCode())); // 신호 키 → point 목록
             this.pointMap.clear();
             this.pointMap.putAll(newPointMap);
             return Mono.empty();

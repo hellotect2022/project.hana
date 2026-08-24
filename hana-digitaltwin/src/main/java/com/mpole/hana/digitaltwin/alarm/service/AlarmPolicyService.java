@@ -12,7 +12,6 @@ import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
-import com.mpole.hana.digitaltwin.event.entity.EventDisplayType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,9 +46,6 @@ public class AlarmPolicyService {
                 .conditionKind(req.conditionKind())
                 .operator(req.operator())
                 .triggerValue(req.triggerValue())
-                .displayType(req.displayType() != null ? req.displayType() : EventDisplayType.SIMPLE)
-                .sopTemplateId(req.sopTemplateId())
-                .effectEnabled(req.effectEnabled())
                 .sustainSec(req.sustainSec())
                 .cooldownSec(req.cooldownSec())
                 .active(req.active() != null ? req.active() : Boolean.TRUE)
@@ -88,9 +84,6 @@ public class AlarmPolicyService {
         policy.setConditionKind(req.conditionKind());
         policy.setOperator(req.operator());
         policy.setTriggerValue(req.triggerValue());
-        policy.setDisplayType(req.displayType() != null ? req.displayType() : EventDisplayType.SIMPLE);
-        policy.setSopTemplateId(req.sopTemplateId());
-        policy.setEffectEnabled(req.effectEnabled());
         policy.setSustainSec(req.sustainSec());
         policy.setCooldownSec(req.cooldownSec());
         policy.setActive(req.active() != null ? req.active() : Boolean.TRUE);

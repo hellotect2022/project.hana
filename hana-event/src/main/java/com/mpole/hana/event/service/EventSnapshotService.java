@@ -34,7 +34,7 @@ public class EventSnapshotService {
                     log.info("event snapshot 용으로 수신하는 flux 데이타 {}",event);
                     return insertEventHistory(event);
                 })
-                .subscribe()
+                //.subscribe()
         ;
     }
 

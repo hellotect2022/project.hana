@@ -40,10 +40,6 @@ public final class CctvProperty implements DevicePropertyInfo{
     @JsonProperty("cctv_type")
     private String cctvType;
 
-    // 카메라 명칭
-    @JsonProperty("cctv_name")
-    private String cctvName;
-
     // 카메라 제조사
     @JsonProperty("cctv_mfg")
     private String cctvMfg;

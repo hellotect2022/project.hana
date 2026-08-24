@@ -46,9 +46,6 @@ public class AlarmPolicyReader {
             String conditionKind,  // THRESHOLD / TOGGLE
             String operator,       // GTE / LTE / GT / LT (nullable)
             String triggerValue,   // TOGGLE 트리거값(nullable)
-            String displayType,    // SIMPLE / SOP
-            Long sopTemplateId,
-            boolean effectEnabled,
             int sustainSec,
             int cooldownSec
     ) {
@@ -86,7 +83,7 @@ public class AlarmPolicyReader {
         String sql = """
                 SELECT policy_id, policy_name, scope, category_id, device_id,
                        tag_name, point_type, condition_kind, operator, trigger_value,
-                       display_type, sop_template_id, effect_enabled, sustain_sec, cooldown_sec
+                       sustain_sec, cooldown_sec
                 FROM tbl_alarm_policy
                 WHERE active = true
                 """;
@@ -102,9 +99,6 @@ public class AlarmPolicyReader {
                         row.get("condition_kind", String.class),
                         row.get("operator", String.class),
                         row.get("trigger_value", String.class),
-                        row.get("display_type", String.class),
-                        row.get("sop_template_id", Long.class),
-                        Boolean.TRUE.equals(row.get("effect_enabled", Boolean.class)),
                         toInt(row.get("sustain_sec", Integer.class)),
                         toInt(row.get("cooldown_sec", Integer.class))
                 ))
@@ -156,6 +150,22 @@ public class AlarmPolicyReader {
                 .filter(e -> e.getKey() != null && e.getValue() != null)
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue)
                 .doOnError(e -> log.error("[AlarmPolicyReader] loadDeviceCategoryMap 실패: {}", e.getMessage()));
+    }
+
+    /**
+     * deviceId → alarm_state(장비 알람 마스터 스위치) 맵. false 인 장비는 평가기에서 알람을 억제한다.
+     */
+    public Mono<Map<Long, Boolean>> loadDeviceAlarmEnabled() {
+        String sql = "SELECT device_id, alarm_state FROM tbl_device";
+        return postgresDatabaseClient.sql(sql)
+                .map((row, meta) -> {
+                    Boolean v = row.get("alarm_state", Boolean.class);
+                    return Map.entry(row.get("device_id", Long.class), v == null ? Boolean.TRUE : v);
+                })
+                .all()
+                .filter(e -> e.getKey() != null)
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue)
+                .doOnError(e -> log.error("[AlarmPolicyReader] loadDeviceAlarmEnabled 실패: {}", e.getMessage()));
     }
 
     /**

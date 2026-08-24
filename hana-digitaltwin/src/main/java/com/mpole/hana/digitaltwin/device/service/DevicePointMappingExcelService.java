@@ -202,8 +202,6 @@ public class DevicePointMappingExcelService {
         }
 
         List<DevicePointRefMappingRequest> valid = new ArrayList<>();
-        // 파일 내 ref 조합 중복 사전 차단
-        Set<String> seenRefInFile = new HashSet<>();
 
         for (ParsedRow pr : parsedRows) {
             if (pr.pointKey().isEmpty()) {
@@ -223,23 +221,7 @@ public class DevicePointMappingExcelService {
                 continue;
             }
 
-            if (hasDevice) {
-                String refKey = pr.refDeviceCode() + " " + pr.refPointCode();
-                if (!seenRefInFile.add(refKey)) {
-                    failed.add(fail(pr, "파일 내 중복된 SI 매핑입니다: "
-                            + pr.refDeviceCode() + ":" + pr.refPointCode()));
-                    continue;
-                }
-                boolean dbDuplicate = devicePointRepository
-                        .findByRefDeviceCodeAndRefPointCodeAndPointIdNot(
-                                pr.refDeviceCode(), pr.refPointCode(), point.getPointId())
-                        .isPresent();
-                if (dbDuplicate) {
-                    failed.add(fail(pr, "이미 다른 포인트에 연결된 SI 매핑입니다: "
-                            + pr.refDeviceCode() + ":" + pr.refPointCode()));
-                    continue;
-                }
-            }
+            // 1:N 팬아웃 허용 — 같은 ref 조합을 여러 point 가 가질 수 있어 파일내/DB 조합중복 검사 제거(both-or-neither 유지)
 
             valid.add(new DevicePointRefMappingRequest(
                     point.getPointId(),

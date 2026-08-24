@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.alarm.dto;
 
+import com.mpole.hana.digitaltwin.alarm.entity.AlarmEffect;
 import com.mpole.hana.digitaltwin.alarm.entity.AlarmHistory;
 import lombok.Builder;
 
@@ -25,11 +26,8 @@ public record AlarmHistoryResponse(
         Double thresholdValue,
         String operator,
         String triggerValue,
-        String displayType,
-        Long sopTemplateId,
         String icon,
-        String effect,
-        boolean effectEnabled,
+        AlarmEffect effect,
         OffsetDateTime occurredAt,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
@@ -52,11 +50,8 @@ public record AlarmHistoryResponse(
                 .thresholdValue(h.getThresholdValue())
                 .operator(h.getOperator())
                 .triggerValue(h.getTriggerValue())
-                .displayType(h.getDisplayType())
-                .sopTemplateId(h.getSopTemplateId())
                 .icon(h.getIcon())
                 .effect(h.getEffect())
-                .effectEnabled(h.isEffectEnabled())
                 .occurredAt(h.getOccurredAt())
                 .createdAt(h.getCreatedAt())
                 .updatedAt(h.getUpdatedAt())
