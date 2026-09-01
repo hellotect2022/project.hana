@@ -79,7 +79,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -105,7 +105,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -123,7 +123,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -147,7 +147,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -175,7 +175,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -202,7 +202,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
               AND (
                   :keyword IS NULL OR :keyword = ''
                   OR LOWER(p.tagName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(p.pointName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(p.pointKey) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(d.deviceName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(COALESCE(p.refDeviceCode, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -240,7 +240,8 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             UPDATE tbl_device_point p
             SET tag_name = :newTag,
                 point_key = d.device_key || '_' || :newTag,
-                point_name = :pointName,
+                description = :pointName,
+                point_display_name = :pointDisplayName,
                 point_type = :pointType,
                 unit = :unit,
                 active = :active,
@@ -255,6 +256,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("oldTag") String oldTag,
             @Param("newTag") String newTag,
             @Param("pointName") String pointName,
+            @Param("pointDisplayName") String pointDisplayName,
             @Param("pointType") String pointType,
             @Param("unit") String unit,
             @Param("active") boolean active
@@ -263,7 +265,8 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
     @Modifying(clearAutomatically = true)
     @Query(value = """
             UPDATE tbl_device_point p
-            SET point_name = :pointName,
+            SET description = :pointName,
+                point_display_name = :pointDisplayName,
                 point_type = :pointType,
                 unit = :unit,
                 active = :active,
@@ -277,6 +280,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("categoryId") Long categoryId,
             @Param("tagName") String tagName,
             @Param("pointName") String pointName,
+            @Param("pointDisplayName") String pointDisplayName,
             @Param("pointType") String pointType,
             @Param("unit") String unit,
             @Param("active") boolean active
@@ -285,7 +289,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
     @Modifying(clearAutomatically = true)
     @Query(value = """
             INSERT INTO tbl_device_point (
-                device_id, point_key, tag_name, point_name, point_type, unit, active,
+                device_id, point_key, tag_name, description, point_display_name, point_type, unit, active,
                 ref_device_code, ref_point_code, created_at, updated_at
             )
             SELECT
@@ -293,6 +297,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
                 d.device_key || '_' || :tagName,
                 :tagName,
                 :pointName,
+                :pointDisplayName,
                 :pointType,
                 :unit,
                 :active,
@@ -313,6 +318,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("categoryId") Long categoryId,
             @Param("tagName") String tagName,
             @Param("pointName") String pointName,
+            @Param("pointDisplayName") String pointDisplayName,
             @Param("pointType") String pointType,
             @Param("unit") String unit,
             @Param("active") boolean active

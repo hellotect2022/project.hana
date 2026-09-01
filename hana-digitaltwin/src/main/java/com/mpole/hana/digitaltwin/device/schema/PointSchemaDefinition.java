@@ -7,6 +7,7 @@ public record PointSchemaDefinition(
         String type,
         String unit,
         String tagDesc,
+        String tagDisplayName,
         boolean isDisplay
 ) {
     @JsonCreator

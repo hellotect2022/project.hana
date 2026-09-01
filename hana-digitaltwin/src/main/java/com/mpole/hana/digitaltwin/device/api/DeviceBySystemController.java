@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.device.api;
 
 import com.mpole.hana.digitaltwin.device.dto.DeviceResponse;
+import com.mpole.hana.digitaltwin.device.dto.DeviceResponseWithDiagram;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,6 +58,38 @@ public class DeviceBySystemController {
         if (systemId != null) {
             Page<DeviceResponse> devices = deviceService.getDevicesBySystemId(systemId, pageable);
             return ResponseEntity.ok(ApiResponse.success("시스템 직접 매핑 장비 목록 조회", devices));
+        }
+        throw new IllegalArgumentException("subSystemId 또는 systemId 중 하나는 필수입니다.");
+    }
+
+    //region swagger 🔄 시스템/하위 시스템별 장비 목록 조회 명세서
+    @Operation(
+            summary = "시스템/하위 시스템별 장비 목록 조회 (V2)",
+            description = """
+                    기존 API 에 추가적으로 계통도 wire 정보를 추가
+                    """,
+            parameters = {
+                    @Parameter(name = "subSystemId", description = "하위 시스템 ID (3단 경로)", example = "1"),
+                    @Parameter(name = "systemId", description = "시스템 ID (직접 매핑 2단 경로)", example = "1"),
+                    @Parameter(name = "page", description = "페이지 번호 (0부터 시작)", example = "0"),
+                    @Parameter(name = "size", description = "페이지 당 데이터 개수", example = "20"),
+            }
+    )
+    //endregion
+    @GetMapping("/v2/device-system/devices")
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<DeviceResponseWithDiagram>>> getDevicesBySystemOrSubSystemWithSystemDiagram(
+            @RequestParam(name = "subSystemId", required = false) Long subSystemId,
+            @RequestParam(name = "systemId", required = false) Long systemId,
+            @Parameter(hidden = true) @PageableDefault(size = 20) Pageable pageable
+
+    ) {
+        if (subSystemId != null) {
+            Page<DeviceResponseWithDiagram> devices = deviceService.getDevicesWithDiagramBySubSystemId(subSystemId, pageable);
+            return ResponseEntity.ok(ApiResponse.success("하위 시스템별 장비 목록 조회(계통도 포함)", devices));
+        }
+        if (systemId != null) {
+            Page<DeviceResponseWithDiagram> devices = deviceService.getDevicesWithDiagramBySystemId(systemId, pageable);
+            return ResponseEntity.ok(ApiResponse.success("시스템 직접 매핑 장비 목록 조회(계통도 포함)", devices));
         }
         throw new IllegalArgumentException("subSystemId 또는 systemId 중 하나는 필수입니다.");
     }

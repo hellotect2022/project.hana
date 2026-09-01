@@ -44,7 +44,8 @@ public class DevicePointMappingExcelService {
     private static final String COL_DEVICE_DESC = "장비상세설명";
     private static final String COL_CATEGORY = "카테고리";
     private static final String COL_TAG = "태그";
-    private static final String COL_POINT_NAME = "포인트명";
+    private static final String COL_POINT_NAME = "설명";
+    private static final String COL_POINT_DISPLAY_NAME = "표시명";
     private static final String COL_POINT_KEY = "point_key";
     private static final String COL_POINT_TYPE = "유형";
     private static final String COL_UNIT = "단위";
@@ -53,7 +54,7 @@ public class DevicePointMappingExcelService {
 
     // 업로드는 헤더 '이름'으로 컬럼을 찾으므로(추가 컬럼 무시) 표시용 컬럼을 늘려도 import 는 무영향.
     private static final String[] HEADERS = {
-            COL_DEVICE_NAME, COL_DEVICE_DESC, COL_CATEGORY, COL_TAG, COL_POINT_NAME,
+            COL_DEVICE_NAME, COL_DEVICE_DESC, COL_CATEGORY, COL_TAG, COL_POINT_NAME, COL_POINT_DISPLAY_NAME,
             COL_POINT_KEY, COL_POINT_TYPE, COL_UNIT, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE
     };
 
@@ -108,12 +109,13 @@ public class DevicePointMappingExcelService {
                 row.createCell(1).setCellValue(device != null ? nvl(device.getDescription()) : "");
                 row.createCell(2).setCellValue(categoryPath(device));
                 row.createCell(3).setCellValue(nvl(p.getTagName()));
-                row.createCell(4).setCellValue(nvl(p.getPointName()));
-                row.createCell(5).setCellValue(nvl(p.getPointKey()));
-                row.createCell(6).setCellValue(nvl(p.getPointType()));
-                row.createCell(7).setCellValue(nvl(p.getUnit()));
-                row.createCell(8).setCellValue(nvl(p.getRefDeviceCode()));
-                row.createCell(9).setCellValue(nvl(p.getRefPointCode()));
+                row.createCell(4).setCellValue(nvl(p.getDescription()));
+                row.createCell(5).setCellValue(nvl(p.getPointDisplayName()));
+                row.createCell(6).setCellValue(nvl(p.getPointKey()));
+                row.createCell(7).setCellValue(nvl(p.getPointType()));
+                row.createCell(8).setCellValue(nvl(p.getUnit()));
+                row.createCell(9).setCellValue(nvl(p.getRefDeviceCode()));
+                row.createCell(10).setCellValue(nvl(p.getRefPointCode()));
             }
 
             for (int i = 0; i < HEADERS.length; i++) {

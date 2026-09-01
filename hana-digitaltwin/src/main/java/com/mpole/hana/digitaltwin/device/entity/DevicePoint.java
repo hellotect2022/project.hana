@@ -42,9 +42,13 @@ public class DevicePoint extends DateEntity {
     @Comment("SI view 테이블과 연계되는 point_code")
     private String refPointCode;
 
-    @Comment("view 테이블로 부터 point_code")
-    @Column(name="point_name")
-    private String pointName;
+    @Comment("포인트 설명 (구 point_name)")
+    @Column(name="description")
+    private String description;
+
+    @Comment("포인트 표시명")
+    @Column(name="point_display_name")
+    private String pointDisplayName;
 
     @Comment("schema_definition의 tagName과 매핑되는 논리적 태그명 (예: CurTemp, Voltage)")
     @Column(name="tag_name")

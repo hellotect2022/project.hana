@@ -42,7 +42,7 @@ public class DeviceValueHistoryService {
                             log.error("[DeviceValueHistory] 적재 에러(해당 배치 skip): {}", e.getMessage());
                             return Mono.empty();
                         }))
-                //.subscribe()
+                .subscribe()
         ;
     }
 

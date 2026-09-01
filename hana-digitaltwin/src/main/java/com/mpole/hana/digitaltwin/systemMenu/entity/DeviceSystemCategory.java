@@ -4,6 +4,8 @@ import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Comment;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "tbl_device_system_category", uniqueConstraints = {
@@ -34,7 +36,8 @@ public class DeviceSystemCategory {
     private DeviceSubSystem deviceSubSystem;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", nullable = false)
+    @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "fk_device_system_category_category "))
+    @OnDelete(action = OnDeleteAction.CASCADE) // 👈 Hibernate 가 DDL 생성 시 ON DELETE CASCADE 추가
     @Comment("소분류 카테고리")
     private DeviceCategory category;
 

@@ -37,11 +37,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import com.mpole.hana.digitaltwin.device.dto.DeviceResponseWithDiagram;
+import com.mpole.hana.digitaltwin.device.dto.DeviceWiringResponse;
+import com.mpole.hana.digitaltwin.systemDiagram.entity.SystemDiagramWiring;
+import com.mpole.hana.digitaltwin.systemDiagram.repository.SystemDiagramWiringRepository;
+
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -56,6 +64,7 @@ public class DeviceService {
     private final DeviceSystemRepository deviceSystemRepository;
     private final DeviceSubSystemRepository deviceSubSystemRepository;
     private final CommandPointRepository commandPointRepository;
+    private final SystemDiagramWiringRepository systemDiagramWiringRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -141,15 +150,16 @@ public class DeviceService {
             if (devicePointRepository.existsByPointKey(pointKey)) {
                 throw new IllegalStateException("이미 사용 중인 point_key 입니다: " + pointKey);
             }
-            String pointName = item.pointName() != null && !item.pointName().isBlank()
-                    ? item.pointName().trim()
+            String description = item.description() != null && !item.description().isBlank()
+                    ? item.description().trim()
                     : tagName;
 
             DevicePoint point = DevicePoint.builder()
                     .device(device)
                     .pointKey(pointKey)
                     .tagName(tagName)
-                    .pointName(pointName)
+                    .description(description)
+                    .pointDisplayName(item.pointDisplayName())
                     .pointType(item.pointType())
                     .unit(item.unit())
                     .active(item.isDisplay() == null || item.isDisplay())
@@ -373,6 +383,14 @@ public class DeviceService {
         return mapWithCommandPoints(deviceRepository.fetchTargetCategoryDevices(categoryId,pageable));
     }
 
+    /**
+     * {@link #getTargetCategoryDevices} 결과에 계통도 배선(wiring)을 붙여 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public Page<DeviceResponseWithDiagram> getTargetCategoryDevicesWithDiagram(Long categoryId, Pageable pageable) {
+        return attachWirings(getTargetCategoryDevices(categoryId, pageable));
+    }
+
     @Transactional(readOnly = true)
     public long getTargetCategoryDevicesCnt(Long categoryId) {
         return deviceRepository.countByCategory_CategoryId(categoryId);
@@ -417,6 +435,52 @@ public class DeviceService {
         }
 
         return mapWithCommandPoints(deviceRepository.fetchByCategoryIds(categoryIds, pageable));
+    }
+
+    /**
+     * {@link #getDevicesBySystemId} 결과에 계통도 배선(wiring)을 붙여 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public Page<DeviceResponseWithDiagram> getDevicesWithDiagramBySystemId(Long systemId, Pageable pageable) {
+        return attachWirings(getDevicesBySystemId(systemId, pageable));
+    }
+
+    /**
+     * {@link #getDevicesBySubSystemId} 결과에 계통도 배선(wiring)을 붙여 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public Page<DeviceResponseWithDiagram> getDevicesWithDiagramBySubSystemId(Long subSystemId, Pageable pageable) {
+        return attachWirings(getDevicesBySubSystemId(subSystemId, pageable));
+    }
+
+    /**
+     * 페이지 내 디바이스들에 연결된 배선(from/to 어느 쪽이든)을 배치 1쿼리로 조회해 각 디바이스에 매핑한다.
+     * 한 배선의 양끝(from·to)이 모두 페이지에 있으면 각 디바이스에 자기 관점(direction/상대편)으로 붙는다.
+     */
+    private Page<DeviceResponseWithDiagram> attachWirings(Page<DeviceResponse> page) {
+        List<Long> deviceIds = page.getContent().stream()
+                .map(DeviceResponse::deviceId)
+                .toList();
+        if (deviceIds.isEmpty()) {
+            return page.map(d -> new DeviceResponseWithDiagram(d, List.of()));
+        }
+
+        Set<Long> pageIds = new HashSet<>(deviceIds);
+        List<SystemDiagramWiring> wirings = systemDiagramWiringRepository.findConnectedToDevices(deviceIds);
+
+        Map<Long, List<DeviceWiringResponse>> byDevice = new HashMap<>();
+        for (SystemDiagramWiring w : wirings) {
+            Long fromId = w.getFromDevice() != null ? w.getFromDevice().getDeviceId() : null;
+            Long toId = w.getToDevice() != null ? w.getToDevice().getDeviceId() : null;
+            if (fromId != null && pageIds.contains(fromId)) {
+                byDevice.computeIfAbsent(fromId, k -> new ArrayList<>()).add(DeviceWiringResponse.from(w, fromId));
+            }
+            if (toId != null && pageIds.contains(toId)) {
+                byDevice.computeIfAbsent(toId, k -> new ArrayList<>()).add(DeviceWiringResponse.from(w, toId));
+            }
+        }
+
+        return page.map(d -> new DeviceResponseWithDiagram(d, byDevice.getOrDefault(d.deviceId(), List.of())));
     }
 
     @Transactional

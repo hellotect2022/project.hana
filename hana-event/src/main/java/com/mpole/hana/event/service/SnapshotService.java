@@ -35,7 +35,7 @@ public class SnapshotService {
                     log.info("snapshot 용으로 수신하는 flux 데이타 {}",bundles.size());
                     return upsertBulk(bundles);
                 })
-                //.subscribe()
+                .subscribe()
         ;
     }
 

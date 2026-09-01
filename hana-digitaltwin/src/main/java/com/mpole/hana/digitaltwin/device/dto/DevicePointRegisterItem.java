@@ -7,7 +7,8 @@ public record DevicePointRegisterItem(
         String schemaTagName,
         String tagName,
         String pointKey,
-        String pointName,
+        String description,
+        String pointDisplayName,
         String pointType,
         String unit,
         Boolean isDisplay

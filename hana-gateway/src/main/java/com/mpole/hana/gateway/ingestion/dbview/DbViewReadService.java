@@ -36,7 +36,7 @@ public class DbViewReadService {
         return mssqlDatabaseClient.sql(
                     """
                         SELECT *
-                        FROM vwDigitalTwin_02 WITH (NOLOCK)
+                        FROM vwDigitalTwin_01 WITH (NOLOCK)
                         -- WHERE update_datetime > :lastTime
                         ORDER BY update_datetime DESC
                     """
@@ -71,7 +71,6 @@ public class DbViewReadService {
                     OffsetDateTime currentRowTime = localDateTime.atOffset(ZoneOffset.ofHours(9));
                     lastDataTimeInBatch.set(currentRowTime);
                     String pointCode = (String) row.get("point_code");
-                    String pointName = (String) row.get("point_name");
                     String valueRaw = (String) row.get("value");
                     String deviceCode = (String) row.get("device_code");
                     String objectType = (String) row.get("object_type");
@@ -82,7 +81,6 @@ public class DbViewReadService {
                                     .deviceCode(deviceCode)
                                     .pointCode(pointCode)
                                     .objectType(objectType)
-                                    .pointName(pointName)
                                     .valueRaw(valueRaw)
                                     .updateDatetime(currentRowTime)
                                     .build()

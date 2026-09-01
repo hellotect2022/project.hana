@@ -3,6 +3,7 @@ package com.mpole.hana.digitaltwin.device.api;
 import com.mpole.hana.digitaltwin.device.dto.DeviceCategoryRequest;
 import com.mpole.hana.digitaltwin.device.dto.DeviceCategoryResponse;
 import com.mpole.hana.digitaltwin.device.dto.DeviceResponse;
+import com.mpole.hana.digitaltwin.device.dto.DeviceResponseWithDiagram;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
@@ -101,6 +102,25 @@ public class DeviceByCategoryController {
             @Parameter(hidden = true) @PageableDefault(size = 20) Pageable pageable) {
         Page<DeviceResponse> response = deviceService.getTargetCategoryDevices(categoryId,pageable);
         return ResponseEntity.ok(ApiResponse.success("카테고리 별 장비 목록 조회", response));
+    }
+
+    //region swagger 🔄 카테고리별 장비 목록 조회 명세서
+    @Operation(
+            summary = "카테고리별 장비 목록 조회 (V2)",
+            description = "특정 카테고리 ID(categoryId)에 속한 전체 장비 목록을 조회합니다. 계통도 포함",
+            parameters = {
+                    @Parameter(name = "categoryId", description = "장비 카테고리 ID", example = "1", required = true),
+                    @Parameter(name = "page", description = "페이지 번호 (0부터 시작)", example = "0"),
+                    @Parameter(name = "size", description = "페이지 당 데이터 개수", example = "20")
+            }
+    )
+    //endregion
+    @GetMapping("/v2/device-categories/{categoryId}/devices")
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<DeviceResponseWithDiagram>>> getDeviceInCategoriesWithSystemDiagram(
+            @PathVariable Long categoryId,
+            @Parameter(hidden = true) @PageableDefault(size = 20) Pageable pageable) {
+        Page<DeviceResponseWithDiagram> response = deviceService.getTargetCategoryDevicesWithDiagram(categoryId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("카테고리 별 장비 목록 조회(계통도 포함)", response));
     }
 
     //region swagger 🔄 카테고리별 장비 개수 조회 명세서

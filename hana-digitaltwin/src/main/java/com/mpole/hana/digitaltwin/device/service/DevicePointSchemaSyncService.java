@@ -50,10 +50,13 @@ public class DevicePointSchemaSyncService {
         tagsToUpdate.retainAll(newTags);
         tagsToUpdate.removeAll(renamedOldTags);
 
+        // 삭제: 신 스키마에서 빠졌고 rename 도 아닌 태그 → 카테고리 내 해당 포인트 제거(검증 없음).
         if (!tagsToDelete.isEmpty()) {
             devicePointRepository.bulkDeleteByCategoryIdAndTagNameIn(categoryId, tagsToDelete);
         }
 
+        // 이름변경: old→new 매핑 태그. [검증] new point_key 충돌 없는지 확인 후 기존 행의 tag/키/속성 UPDATE.
+        //           (UPDATE 라 old 포인트가 없던 장비엔 생성 안 됨 → 아래 백필에서 보완.)
         for (Map.Entry<String, String> rename : renames.entrySet()) {
             String oldTag = rename.getKey();
             String newTag = rename.getValue();
@@ -67,12 +70,15 @@ public class DevicePointSchemaSyncService {
                     oldTag,
                     newTag,
                     resolvePointName(definition),
+                    definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
                     definition.isDisplay()
             );
         }
 
+        // 갱신: old·new 양쪽에 존재(동일명)하는 태그 → 기존 행의 속성(설명/표시명/타입/단위/활성) UPDATE.
+        //       (UPDATE 라 포인트가 없던 장비엔 생성 안 됨 → 아래 백필에서 보완.)
         for (String tagName : tagsToUpdate) {
             PointSchemaDefinition definition = newByTag.get(tagName);
             if (definition == null) {
@@ -82,12 +88,14 @@ public class DevicePointSchemaSyncService {
                     categoryId,
                     tagName,
                     resolvePointName(definition),
+                    definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
                     definition.isDisplay()
             );
         }
 
+        // 신규: 신 스키마에만 있는 태그. [검증] new point_key 충돌 없는지 확인 후, 태그 없는 카테고리 내 전 장비에 INSERT(NOT EXISTS).
         for (String tagName : tagsToInsert) {
             PointSchemaDefinition definition = newByTag.get(tagName);
             if (definition == null) {
@@ -98,6 +106,30 @@ public class DevicePointSchemaSyncService {
                     categoryId,
                     tagName,
                     resolvePointName(definition),
+                    definition.tagDisplayName(),
+                    definition.type(),
+                    definition.unit(),
+                    definition.isDisplay()
+            );
+        }
+
+        // 백필(정합 보장): rename/update 는 UPDATE 라 포인트가 누락된 장비엔 안 생긴다.
+        //   갱신·이름변경 대상 태그를 대상으로 NOT EXISTS INSERT 를 한 번 더 돌려, "카테고리 내 모든 장비가
+        //   현재 스키마의 모든 태그 포인트를 갖는다"를 멱등 보장한다. (tagsToInsert 는 위에서 이미 전수 생성됨)
+        Set<String> tagsToBackfill = new HashSet<>(tagsToUpdate);
+        tagsToBackfill.addAll(renamedNewTags);
+        for (String tagName : tagsToBackfill) {
+            PointSchemaDefinition definition = newByTag.get(tagName);
+            if (definition == null) {
+                continue;
+            }
+            // [검증] 누락 장비에 넣을 point_key 가 다른 태그로 이미 쓰이는지(진짜 충돌만 잡음, 보유 장비는 제외됨).
+            assertNoInsertKeyConflict(categoryId, tagName);
+            devicePointRepository.bulkInsertByCategoryIdAndTag(
+                    categoryId,
+                    tagName,
+                    resolvePointName(definition),
+                    definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
                     definition.isDisplay()
@@ -172,6 +204,7 @@ public class DevicePointSchemaSyncService {
                     item.type(),
                     item.unit(),
                     item.tagDesc(),
+                    item.tagDisplayName(),
                     item.isDisplay()
             ));
         }

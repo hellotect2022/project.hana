@@ -28,32 +28,20 @@ public class DbViewBundleService {
                             .parallelStream()
                             .<XnPointData>mapMulti((raw, consumer) -> {
                                 // 1:N 팬아웃 — 하나의 신호(deviceCode:pointCode)가 여러 device_point 로 방출.
-                                for (var meta : initDevicePointDataService.getPoints(raw.deviceCode() + ":" + raw.pointCode())) {
+                                for (var pointData : initDevicePointDataService.getPoints(raw.deviceCode() + ":" + raw.pointCode())) {
                                     consumer.accept(
                                             raw.toBuilder()
-                                                    .pointkey(meta.pointKey())
-                                                    .deviceId(meta.deviceId())
-                                                    .pointId(meta.pointId())
-                                                    .tagName(meta.schemaTagName())
-                                                    .unit(meta.unit())
-                                                    .objectType(meta.pointType().name())
+                                                    .pointkey(pointData.pointKey())
+                                                    .deviceId(pointData.deviceId())
+                                                    .pointId(pointData.pointId())
+                                                    .tagName(pointData.schemaTagName())
+                                                    .pointDisplayName(pointData.pointDisplayName())
+                                                    .unit(pointData.unit())
+                                                    .objectType(pointData.pointType().name())
                                                     .build());
                                 }
                             })
                             .collect(Collectors.groupingBy(XnPointData::deviceId));
-
-//
-
-//                    var result = grouped.entrySet().stream().map(entry -> {
-//                        List<XnPointData> points = entry.getValue();
-//                        points.sort(Comparator.comparing(XnPointData::updateDatetime).reversed());
-//
-//                        return DeviceBundle.builder()
-//                                .deviceId(entry.getKey())
-//                                .timestamp(points.getFirst().updateDatetime())
-//                                .points(points)
-//                                .build();
-//                    }).toList();
 
                     log.info(" - 순수 번들링 갯수: {} 개", grouped.size());
                     log.debug(" - 순수 번들링 데이타: {} ", grouped);
