@@ -1,6 +1,6 @@
 package com.mpole.hana.digitaltwin.device.dto;
 
-import com.mpole.hana.digitaltwin.device.entity.ConnectionState;
+import com.mpole.hana.common.constant.ConnectionState;
 import com.mpole.hana.digitaltwin.device.entity.OperationState;
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
 
@@ -21,7 +21,10 @@ public record DeviceUpdateRequest(
         // 상태값(선택). alarm_state=false 면 알람 억제. operation/connection 은 산정 로직 추후.
         Boolean alarmState,
         OperationState operationState,
+        // 통신상태 수동 지정 — 인프라 미소속(infraId null) 장비 전용. 소속 장비는 자동 상속이라 거부됨.
         ConnectionState connectionState,
+        // 소속 인프라 지정(선택). null=미변경. 해제는 PUT /api/device-infra/mapping 사용.
+        Long infraId,
         List<DevicePointRegisterItem> points
 ) {
 }

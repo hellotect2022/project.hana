@@ -1,4 +1,4 @@
-package com.mpole.hana.event.config;
+package com.mpole.hana.event.config.sink;
 
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.event.dto.EventHistoryDto;
@@ -9,7 +9,7 @@ import reactor.core.publisher.Sinks;
 import java.util.List;
 
 @Component
-public class ReactiveEventQueue {
+public class ReactiveQueue {
     // 1. 센서/디바이스 원본 데이터 스트림 싱크
     private final Sinks.Many<List<DeviceBundle>> deviceRawSink =
             Sinks.many().multicast().onBackpressureBuffer(20000);

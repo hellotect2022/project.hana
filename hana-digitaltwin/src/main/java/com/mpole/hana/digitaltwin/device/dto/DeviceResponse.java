@@ -1,6 +1,6 @@
 package com.mpole.hana.digitaltwin.device.dto;
 
-import com.mpole.hana.digitaltwin.device.entity.ConnectionState;
+import com.mpole.hana.common.constant.ConnectionState;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePlacement;
@@ -37,7 +37,8 @@ public record DeviceResponse(
         List<CommandPointItem> commandPoints,
         boolean alarmState,
         OperationState operationState,
-        ConnectionState connectionState
+        ConnectionState connectionState,
+        Long infraId
 ) {
     /**
      * 디바이스 목록/상세에 임베드되는 제어 포인트 요약.
@@ -91,7 +92,9 @@ public record DeviceResponse(
                 , commandPoints != null ? commandPoints : List.of()
                 , d.isAlarmState()
                 , d.getOperationState()
-                , d.getConnectionState()
+                // v2.1: 통신상태 소스 = current_value(상태 테이블). 행/값 없으면 UNKNOWN.
+                , c != null && c.getConnectionState() != null ? c.getConnectionState() : ConnectionState.UNKNOWN
+                , d.getInfraId()
         );
     }
 

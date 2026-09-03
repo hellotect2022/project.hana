@@ -1,12 +1,13 @@
-package com.mpole.hana.event.init;
+package com.mpole.hana.event.consumer;
 
 import com.mpole.hana.common.dto.DeviceBundle;
-import com.mpole.hana.event.config.ReactiveEventQueue;
+import com.mpole.hana.common.dto.XnPointData;
+import com.mpole.hana.event.config.sink.ReactiveQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.core.OrderComparator;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.kafka.receiver.KafkaReceiver;
 import reactor.util.retry.Retry;
@@ -15,22 +16,21 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class InitKafkaConsumer implements SmartLifecycle {
+public class View01KafkaConsumer implements SmartLifecycle {
     private boolean isRunning = false;
 
-    private final KafkaReceiver<String, Object> kafkaReceiver;
+    private final KafkaReceiver<String, Object> view01KafkaReceiver;
     //private final Sinks.Many<List<DeviceBundle>> centralSink;
-    private final ReactiveEventQueue reactiveEventQueue;
+    private final ReactiveQueue reactiveQueue;
 
     AtomicLong lastReceiveTime = new AtomicLong(0);
 
     private void startKafkaPipeline() {
-        kafkaReceiver.receive()
+        view01KafkaReceiver.receive()
                 // [중요] 1. 배압 전략을 '최신 데이터 유지'로 설정
                 .onBackpressureLatest()
                 // flux를 통해 받을 데이타 갯수를 정의 해당 값이 찬 후 DB 작업이 끝나기 전까지 kafka 에 새로 데이타 요청 안함
@@ -48,14 +48,14 @@ public class InitKafkaConsumer implements SmartLifecycle {
                     } else {
                         log.info("[Kafka Metrics] 첫 batch 수신, batchSize={}", recordList.size());
                     }
-
                     List<DeviceBundle> bundles = recordList.stream()
                             .map(record -> (DeviceBundle) record.value())
-                            .sorted(Comparator.comparing(DeviceBundle::timestamp).reversed())
+                            .sorted(Comparator.comparing(DeviceBundle::timestamp,Comparator.nullsLast(Comparator.reverseOrder())))
                             .toList();
-
+                    log.debug("kafka 수신 데이타 : {}",bundles);
                     publishToEventPipeline(bundles);
                 })
+                .doOnError(e->log.error("kafka 수신하다가 에러남?",e))
                 .retryWhen(
                         Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(5))
                                 .maxBackoff(Duration.ofSeconds(30))
@@ -82,8 +82,7 @@ public class InitKafkaConsumer implements SmartLifecycle {
             return;
         }
 
-        var result = reactiveEventQueue.emitDeviceBundle(bundles);
-        //Sinks.EmitResult result = centralSink.tryEmitNext(bundles);
+        var result = reactiveQueue.emitDeviceBundle(bundles);
 
         if (result.isFailure()) {
             log.warn("Event pipeline emit failed. result={}, size={}", result, bundles.size());

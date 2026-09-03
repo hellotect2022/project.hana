@@ -1,17 +1,13 @@
 package com.mpole.hana.event.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mpole.hana.common.dto.DeviceBundle;
-import com.mpole.hana.event.config.ReactiveEventQueue;
+import com.mpole.hana.event.config.sink.ReactiveQueue;
 import com.mpole.hana.event.dto.EventHistoryDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.Sinks;
-
-import java.util.Map;
 
 @Service
 @Slf4j
@@ -20,14 +16,14 @@ public class WebsocketBroadcastService {
     private final ObjectMapper objectMapper;
 
     //private final Sinks.Many<DeviceBundle> sink = Sinks.many().multicast().directBestEffort();
-    private final ReactiveEventQueue reactiveEventQueue;
+    private final ReactiveQueue reactiveQueue;
 
     public Mono<Void> publish(EventHistoryDto eventHistoryDto) {
         if (eventHistoryDto == null) {
             return Mono.empty();
         }
 
-        var result = reactiveEventQueue.emitEventHistory(eventHistoryDto);
+        var result = reactiveQueue.emitEventHistory(eventHistoryDto);
 
         if (result.isFailure()) {
             // 접속자가 없거나, 순간적으로 전송 불가한 경우
@@ -40,7 +36,7 @@ public class WebsocketBroadcastService {
 
     public Flux<String> streamJson() {
         return //sink.asFlux()
-        reactiveEventQueue
+        reactiveQueue
                 .getEventHistoryFlux()
                 .doOnNext(a->log.info("sink 로 들어온값 {}",a))
                 // 클라이언트 전송 주기 제한

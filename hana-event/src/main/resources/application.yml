@@ -6,8 +6,6 @@ storage:
   postgres:
     driver: "postgresql"
     host: 192.168.250.88
-    #host: 192.168.250.181
-    #host: 192.168.250.249
     port: 5432
     user: testuser
     password: "1q2w3e"
@@ -41,7 +39,14 @@ spring:
 hdt:
   kafka:
     topic:
-      raw: test2
+      view01: view01                      # gateway 의 hdt.kafka.topic.view01 과 동일해야 함
+      view02: view02                      # gateway 의 hdt.kafka.topic.view02 와 동일해야 함
+
+  # 인프라 상태 수신·상속 수렴(도메인 관점이라 infra 네이밍 유지 — 수집 관점인 gateway 는 dbview.viewNN).
+  # gateway 의 hdt.dbview.view02.enabled 와 짝을 이룬다(둘 다 true 여야 동작).
+  dbview:
+    view02:
+      enabled: true
 
 management:
   server:

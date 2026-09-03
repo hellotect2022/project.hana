@@ -31,6 +31,7 @@ import com.mpole.hana.digitaltwin.systemMenu.repository.DeviceSystemRepository;
 import com.mpole.hana.digitaltwin.realtime.api.DeviceRealtimeController;
 import jakarta.persistence.EntityNotFoundException; 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import com.mpole.hana.digitaltwin.device.dto.DeviceResponseWithDiagram;
 import com.mpole.hana.digitaltwin.device.dto.DeviceWiringResponse;
+import com.mpole.hana.digitaltwin.infra.repository.DeviceInfraRepository;
+import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import com.mpole.hana.digitaltwin.systemDiagram.entity.SystemDiagramWiring;
 import com.mpole.hana.digitaltwin.systemDiagram.repository.SystemDiagramWiringRepository;
 
@@ -55,6 +58,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DeviceService {
     private final DeviceRepository deviceRepository;
     private final DeviceCategoryRepository deviceCategoryRepository;
@@ -65,6 +69,8 @@ public class DeviceService {
     private final DeviceSubSystemRepository deviceSubSystemRepository;
     private final CommandPointRepository commandPointRepository;
     private final SystemDiagramWiringRepository systemDiagramWiringRepository;
+    private final DeviceCurrentValueRepository deviceCurrentValueRepository;
+    private final DeviceInfraRepository deviceInfraRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -324,6 +330,21 @@ public class DeviceService {
             point.setRefDeviceCode(refDeviceCode);
             point.setRefPointCode(refPointCode);
         }
+
+        // 인프라 소속 자동 산정 훅(설계 v2.2): 리매핑된 장비 중 infra_id 미지정(NULL) 장비만 재산정.
+        // (수동 지정은 덮지 않음. 공유신호 제외 목록은 관리자 auto-assign 액션에서 적용.)
+        Set<Long> touchedDeviceIds = requests.stream()
+                .map(r -> devicePointRepository.findById(r.pointId())
+                        .map(p -> p.getDevice() != null ? p.getDevice().getDeviceId() : null)
+                        .orElse(null))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!touchedDeviceIds.isEmpty()) {
+            int assigned = deviceInfraRepository.autoAssignForDevices(touchedDeviceIds);
+            if (assigned > 0) {
+                log.info("[DeviceInfra] 포인트 리매핑 훅 — {}개 장비 인프라 자동 매핑", assigned);
+            }
+        }
     }
 
     private static String trimToNull(String value) {
@@ -529,8 +550,21 @@ public class DeviceService {
         if (request.operationState() != null) {
             device.setOperationState(request.operationState());
         }
+
+        // 소속 인프라 지정(제공된 경우만). 해제(null 설정)는 PUT /api/device-infra/mapping 경유.
+        if (request.infraId() != null) {
+            device.setInfraId(request.infraId());
+        }
+
+        // 통신상태(v2.1): 저장소는 tbl_device_current_value.connection_state.
+        // 인프라 소속 장비는 자동 상속(reconcile) 소유라 수동 변경 거부, 미소속(MQTT 등)만 타깃 upsert.
         if (request.connectionState() != null) {
-            device.setConnectionState(request.connectionState());
+            if (device.getInfraId() != null) {
+                throw new IllegalArgumentException(
+                        "인프라 소속 장비의 connectionState 는 인프라 상태에서 자동 상속됩니다(수동 변경 불가). deviceId=" + deviceId);
+            }
+            deviceCurrentValueRepository.upsertConnectionState(
+                    deviceId, device.getDeviceKey(), request.connectionState().name());
         }
 
         // 3D 에셋은 카테고리(defaultAsset) 기준으로 렌더한다.

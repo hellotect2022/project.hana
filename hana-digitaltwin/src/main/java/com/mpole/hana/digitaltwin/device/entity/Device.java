@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.entity;
 
+import com.mpole.hana.common.constant.ConnectionState;
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
@@ -85,11 +86,20 @@ public class Device extends DateEntity {
     @Builder.Default
     private OperationState operationState = OperationState.UNKNOWN;
 
+    /**
+     * @deprecated v2.1 설계 — 통신상태는 tbl_device_current_value.connection_state 로 이관(상태는 상태 테이블에).
+     * 판독/쓰기 소스에서 제외됨. 컬럼은 정리 SQL 전까지 유지.
+     */
+    @Deprecated
     @Enumerated(EnumType.STRING)
     @Column(name = "connection_state", length = 32)
-    @Comment("연결상태(산정 로직 추후)")
+    @Comment("(폐기 예정) 연결상태 — current_value.connection_state 로 이관됨")
     @Builder.Default
     private ConnectionState connectionState = ConnectionState.UNKNOWN;
+
+    @Column(name = "infra_id")
+    @Comment("소속 인프라(tbl_device_infra FK, ON DELETE SET NULL). NULL=상속 비대상(MQTT 등 수동 관리)")
+    private Long infraId;
 
     public void clearPlacement() {
         this.placement = null;
