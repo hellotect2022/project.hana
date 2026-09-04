@@ -51,7 +51,16 @@ public class View01ReadService {
 
         // 테이블명은 식별자라 바인딩 파라미터로 넘길 수 없다 — yml 로만 관리되는 신뢰 입력.
         String sql = """
-                SELECT *
+                SELECT 
+                *,
+                CASE
+                    -- 💡 숫자로 변환이 가능한 경우 ➡️ 소수점 한 자리 반올림 후 문자열로 변환
+                    WHEN TRY_CAST(value AS NUMERIC(18, 4)) IS NOT NULL\s
+                    THEN FORMAT(ROUND(CAST(value AS NUMERIC(18, 4)), 1), '0.0')
+                   
+                    -- 💡 NULL이거나 진짜 문자열인 경우 ➡️ 원본 그대로 출력 (NULL이면 빈값 처리 가능)
+                    ELSE ISNULL(VALUE, '')
+                END AS processed_value
                 FROM %s WITH (NOLOCK)
                 WHERE UPDATE_DATETIME IS NOT NULL
                 """.formatted(properties.table());
@@ -59,7 +68,7 @@ public class View01ReadService {
         return mssqlDatabaseClient.sql(sql)
                 .map((row,meta)->{
                     String pointCode = row.get("point_code",String.class);
-                    String valueRaw = row.get("value",String.class);
+                    String valueRaw = row.get("processed_value",String.class);
                     String deviceCode = row.get("device_code",String.class);
                     String objectType = row.get("object_type", String.class);
                     String alarmYn = row.get("alarm_yn",String.class);

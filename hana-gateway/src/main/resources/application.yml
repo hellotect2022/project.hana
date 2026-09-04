@@ -47,10 +47,23 @@ hdt:
   dbview:
     # 뷰 #01 — 관제점 값(vwDigitalTwin_01)
     view01:
-      enabled: true
+      enabled: false
       fixed-delay-ms: 1000                # 1초 — 값은 고빈도
       table: vwDigitalTwin_01
       block-timeout: 5s
+
+      # ── 스냅샷 파이프라인(신규 경로) ──────────────────────────────
+      # 장비별 포인트 골격을 메모리에 두고 뷰 값을 그 칸에 채운 뒤,
+      # 값이 바뀐 장비만 "전체 포인트"로 발행한다.
+      #   → 델타 발행 + 하류 통짜 REPLACE 조합에서 안 바뀐 포인트가 소실되던 문제 해결
+      # ⚠ 위 view01.enabled(기존 델타 경로)와 동시에 켜지 말 것 — 이중 발행됨.
+      #    전환 시: view01.enabled: false + snapshot.enabled: true
+      snapshot:
+        enabled: true
+        fixed-delay-ms: 1000
+        meta-refresh-ms: 30000            # 골격(tbl_device_point) 리로드 주기. 값은 이월됨
+        block-timeout: 60s
+        publish-all-on-start: true        # 기동 직후 1회 전 장비 발행(하류 초기 동기화)
 
     # 뷰 #02 — 중계기 네트워크 상태(vwDigitalTwin_02)
     # ⚠ enabled=false 유지: state-map(1/2/3 의미)이 채워지기 전에는 켜지 말 것.
