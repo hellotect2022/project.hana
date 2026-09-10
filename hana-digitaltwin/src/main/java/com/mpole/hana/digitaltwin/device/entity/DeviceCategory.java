@@ -55,7 +55,7 @@ public class DeviceCategory extends DateEntity {
     private UnityAsset defaultAsset;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "property_type", length = 32)
+    @Column(name = "property_type", columnDefinition = "varchar(255)")
     @Comment("이 카테고리 장비가 쓰는 property_info 타입(CCTV 등). null 이면 GENERIC 취급")
     private DevicePropertyType propertyType;
 

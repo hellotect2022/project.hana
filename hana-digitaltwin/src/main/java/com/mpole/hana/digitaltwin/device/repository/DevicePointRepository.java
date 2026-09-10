@@ -245,6 +245,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
                 point_type = :pointType,
                 unit = :unit,
                 active = :active,
+                data_source = COALESCE(CAST(:dataSource AS varchar), p.data_source),
                 updated_at = NOW()
             FROM tbl_device d
             WHERE p.device_id = d.device_id
@@ -259,7 +260,8 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("pointDisplayName") String pointDisplayName,
             @Param("pointType") String pointType,
             @Param("unit") String unit,
-            @Param("active") boolean active
+            @Param("active") boolean active,
+            @Param("dataSource") String dataSource
     );
 
     @Modifying(clearAutomatically = true)
@@ -270,6 +272,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
                 point_type = :pointType,
                 unit = :unit,
                 active = :active,
+                data_source = COALESCE(CAST(:dataSource AS varchar), p.data_source),
                 updated_at = NOW()
             FROM tbl_device d
             WHERE p.device_id = d.device_id
@@ -283,14 +286,15 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("pointDisplayName") String pointDisplayName,
             @Param("pointType") String pointType,
             @Param("unit") String unit,
-            @Param("active") boolean active
+            @Param("active") boolean active,
+            @Param("dataSource") String dataSource
     );
 
     @Modifying(clearAutomatically = true)
     @Query(value = """
             INSERT INTO tbl_device_point (
                 device_id, point_key, tag_name, description, point_display_name, point_type, unit, active,
-                ref_device_code, ref_point_code, created_at, updated_at
+                ref_device_code, ref_point_code, data_source, created_at, updated_at
             )
             SELECT
                 d.device_id,
@@ -303,6 +307,7 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
                 :active,
                 NULL,
                 NULL,
+                CAST(:dataSource AS varchar),
                 NOW(),
                 NOW()
             FROM tbl_device d
@@ -321,7 +326,8 @@ public interface DevicePointRepository extends JpaRepository<DevicePoint,Long> {
             @Param("pointDisplayName") String pointDisplayName,
             @Param("pointType") String pointType,
             @Param("unit") String unit,
-            @Param("active") boolean active
+            @Param("active") boolean active,
+            @Param("dataSource") String dataSource
     );
 
     @Query(value = """

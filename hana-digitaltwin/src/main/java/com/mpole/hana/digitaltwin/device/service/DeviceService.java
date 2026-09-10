@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.command.repository.CommandPointRepository;
 import com.mpole.hana.digitaltwin.device.dto.BulkActiveRequest;
 import com.mpole.hana.digitaltwin.device.dto.CctvCameraResponse;
@@ -160,6 +161,18 @@ public class DeviceService {
                     ? item.description().trim()
                     : tagName;
 
+            // 미지정(null)이면 하위호환으로 VIEW01 취급된다. RabbitMQ/파생값 포인트는 반드시 지정해야 한다.
+            PointDataSource dataSource = null;
+            String rawSource = trimToNull(item.dataSource());
+            if (rawSource != null) {
+                dataSource = PointDataSource.fromCode(rawSource);
+                if (dataSource == null) {
+                    throw new IllegalArgumentException(
+                            "지원하지 않는 data_source 입니다: " + rawSource + " (pointKey=" + pointKey + ")"
+                    );
+                }
+            }
+
             DevicePoint point = DevicePoint.builder()
                     .device(device)
                     .pointKey(pointKey)
@@ -169,6 +182,7 @@ public class DeviceService {
                     .pointType(item.pointType())
                     .unit(item.unit())
                     .active(item.isDisplay() == null || item.isDisplay())
+                    .dataSource(dataSource)
                     .build();
             devicePointRepository.save(point);
         }
@@ -329,6 +343,20 @@ public class DeviceService {
 
             point.setRefDeviceCode(refDeviceCode);
             point.setRefPointCode(refPointCode);
+
+            // data_source: null 이면 기존 값 유지(비우지 않는다).
+            // 이 필드를 모르는 기존 클라이언트가 매핑을 저장할 때 AMQP/DERIVED 지정이 지워지면
+            // 그 포인트가 VIEW01 로 간주되어 gateway 발행 대상이 되고 값이 null 로 덮인다.
+            String rawSource = trimToNull(request.dataSource());
+            if (rawSource != null) {
+                PointDataSource parsed = PointDataSource.fromCode(rawSource);
+                if (parsed == null) {
+                    throw new IllegalArgumentException(
+                            "지원하지 않는 data_source 입니다: " + rawSource + " (pointId=" + request.pointId() + ")"
+                    );
+                }
+                point.setDataSource(parsed);
+            }
         }
 
         // 인프라 소속 자동 산정 훅(설계 v2.2): 리매핑된 장비 중 infra_id 미지정(NULL) 장비만 재산정.

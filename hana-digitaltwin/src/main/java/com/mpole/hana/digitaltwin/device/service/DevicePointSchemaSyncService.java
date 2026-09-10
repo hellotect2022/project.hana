@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import lombok.RequiredArgsConstructor;
@@ -73,7 +74,8 @@ public class DevicePointSchemaSyncService {
                     definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
 
@@ -91,7 +93,8 @@ public class DevicePointSchemaSyncService {
                     definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
 
@@ -109,7 +112,8 @@ public class DevicePointSchemaSyncService {
                     definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
 
@@ -132,7 +136,8 @@ public class DevicePointSchemaSyncService {
                     definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
     }
@@ -156,6 +161,28 @@ public class DevicePointSchemaSyncService {
             return definition.tagDesc().trim();
         }
         return definition.tagName().trim();
+    }
+
+    /**
+     * 스키마의 원천 소스 코드를 검증해 반환한다.
+     *
+     * <p>비어 있으면 null 을 돌려주고, 쿼리 쪽 {@code COALESCE(:dataSource, p.data_source)} 가
+     * <b>기존 포인트 값을 유지</b>한다 — 소스를 지정하지 않은 스키마를 저장했다고 해서
+     * 매핑 화면에서 개별 지정한 AMQP/DERIVED 가 지워지면, 그 포인트가 VIEW01 로 간주되어
+     * gateway 기동 시 값이 null 로 덮인다. 되돌리려면 {@code VIEW01} 을 명시한다.</p>
+     */
+    private static String resolveDataSource(PointSchemaDefinition definition) {
+        String raw = definition.dataSource();
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        PointDataSource parsed = PointDataSource.fromCode(raw);
+        if (parsed == null) {
+            throw new IllegalArgumentException(
+                    "지원하지 않는 data_source 입니다: " + raw + " (tagName=" + definition.tagName() + ")"
+            );
+        }
+        return parsed.name();
     }
 
     /**
@@ -205,7 +232,8 @@ public class DevicePointSchemaSyncService {
                     item.unit(),
                     item.tagDesc(),
                     item.tagDisplayName(),
-                    item.isDisplay()
+                    item.isDisplay(),
+                    item.dataSource()
             ));
         }
         return result;

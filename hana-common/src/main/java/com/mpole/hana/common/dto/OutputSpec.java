@@ -1,42 +1,46 @@
 package com.mpole.hana.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mpole.hana.common.constant.NotificationChannel;
+
 import lombok.Builder;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 이벤트(알람) 발생 시의 출력 채널 세트.
+ * 이벤트 발생 시의 출력 채널 세트.
  *
- * <p>알람 정책의 레벨(주의/경계/심각)마다 저장되며(JSONB), 이벤트 발생 시 발생 레벨의
- * outputs 가 정본(tbl_alarm_history)에 스냅샷으로 박제된다. 채널은 세트에 최대 1회
- * 등장하므로 맵이 아니라 키드 레코드로 각 채널 config 를 명확히 한다.</p>
+ * <p>규칙 레벨(주의/경계/심각)마다 저장되며(JSONB), 이벤트 발생 시 발생 레벨의 outputs 가
+ * 정본({@code tbl_event.outputs})에 스냅샷으로 박제된다. 이후 정책이 바뀌어도 과거 이벤트의
+ * 의미는 변하지 않는다.</p>
  *
- * <p>모듈 간 계약이라 hana-common 에 두고 특정 모듈 enum 의존을 피한다.
- * {@code @JsonInclude(NON_NULL)} — 값 없는 채널/필드는 직렬화에서 생략.
- * NOTIFY 채널 컴포넌트는 {@code Object.notify()} 충돌 회피를 위해 {@code notifyOutput}
- * 이름을 쓰되 JSON 키는 {@code @JsonProperty("notify")} 로 유지한다.</p>
+ * <p>켜진 채널마다 {@code tbl_event_action} 행이 1건 생성되어 채널별로 독립 상태를 갖는다.</p>
+ *
+ * <p><b>popup 키</b> — 과거 {@code notify} 였으나 {@link NotificationChannel#POPUP} 과 이름을 맞췄다.
+ * 기존 저장 데이터 호환을 위해 {@code @JsonAlias("notify")} 로 옛 키도 읽는다.</p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Builder(toBuilder = true)
 public record OutputSpec(
-        @JsonProperty("notify") NotifyOutput notifyOutput,
+        @JsonAlias("notify") PopupOutput popup,
         SopOutput sop,
         CctvOutput cctv,
-        SmsOutput sms
+        SmsOutput sms,
+        EmailOutput email,
+        DeviceControlOutput deviceControl
 ) {
 
-    /** 기본 팝업/토스트 알림. */
+    /** 팝업/토스트 알림. 사용자 확인(ack) 대상. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NotifyOutput(boolean enabled) {
+    public record PopupOutput(boolean enabled) {
     }
 
-    /** SOP 절차 패널. templateId = 표시할 SOP 템플릿. */
+    /** SOP 절차 패널. templateId = 클라이언트에 내려줄 SOP 템플릿. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SopOutput(boolean enabled, Long templateId) {
@@ -48,14 +52,26 @@ public record OutputSpec(
     public record CctvOutput(boolean enabled, CctvSource source, Integer limit) {
     }
 
-    /** 문자 발송(서버 사이드, 현재 슬롯 — 발송 연동은 후속). */
+    /** 문자 발송(서버 사이드). */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SmsOutput(boolean enabled, Long recipientGroupId, Long templateId) {
     }
 
-    public boolean notifyEnabled() {
-        return notifyOutput != null && notifyOutput.enabled();
+    /** 이메일 발송(서버 사이드). */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record EmailOutput(boolean enabled, Long recipientGroupId, Long templateId) {
+    }
+
+    /** 디바이스 제어 명령(서버 사이드). commandPointId 에 value 를 쓴다. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record DeviceControlOutput(boolean enabled, Long commandPointId, String value) {
+    }
+
+    public boolean popupEnabled() {
+        return popup != null && popup.enabled();
     }
 
     public boolean sopEnabled() {
@@ -70,12 +86,35 @@ public record OutputSpec(
         return sms != null && sms.enabled();
     }
 
-    /** 켜진 '표시 채널'(클라이언트 렌더 대상: NOTIFY/SOP/CCTV) 이름 목록. */
+    public boolean emailEnabled() {
+        return email != null && email.enabled();
+    }
+
+    public boolean deviceControlEnabled() {
+        return deviceControl != null && deviceControl.enabled();
+    }
+
+    /**
+     * 켜진 채널 목록. 이벤트 발생 시 이 목록만큼 {@code tbl_event_action} 행이 생성된다.
+     * 비어 있으면 "액션 없는 event"(표시 전용)이며 그것도 정상이다.
+     */
+    public List<NotificationChannel> enabledChannels() {
+        List<NotificationChannel> out = new ArrayList<>();
+        if (popupEnabled()) out.add(NotificationChannel.POPUP);
+        if (sopEnabled()) out.add(NotificationChannel.SOP);
+        if (cctvEnabled()) out.add(NotificationChannel.CCTV);
+        if (smsEnabled()) out.add(NotificationChannel.SMS);
+        if (emailEnabled()) out.add(NotificationChannel.EMAIL);
+        if (deviceControlEnabled()) out.add(NotificationChannel.DEVICE_CONTROL);
+        return out;
+    }
+
+    /** 클라이언트가 렌더하는 표시 채널만(서버 사이드 발송 채널 제외). */
     public List<String> displayChannels() {
         List<String> out = new ArrayList<>();
-        if (notifyEnabled()) out.add(OutputChannel.POPUP.name());
-        if (sopEnabled()) out.add(OutputChannel.SOP.name());
-        if (cctvEnabled()) out.add(OutputChannel.CCTV.name());
+        if (popupEnabled()) out.add(NotificationChannel.POPUP.name());
+        if (sopEnabled()) out.add(NotificationChannel.SOP.name());
+        if (cctvEnabled()) out.add(NotificationChannel.CCTV.name());
         return out;
     }
 }

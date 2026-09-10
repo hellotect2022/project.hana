@@ -33,6 +33,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import com.mpole.hana.common.constant.PointDataSource;
+import com.mpole.hana.digitaltwin.device.dto.PointDataSourceResponse;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -246,6 +250,26 @@ public class DeviceController {
     ) {
         PointMappingStatsResponse stats = devicePointMappingExcelService.getStats(categoryId, keyword);
         return ResponseEntity.ok(ApiResponse.success("포인트 매핑 통계", stats));
+    }
+
+    //region swagger 🔄 포인트 원천 소스 목록 명세서
+    @Operation(
+            summary = "포인트 원천 소스 목록",
+            description = """
+                    포인트 매핑 화면의 '원천 소스' 선택지를 반환합니다(드롭다운용).
+
+                    값을 지정하지 않은(null) 포인트는 하위호환으로 VIEW01 로 간주됩니다.
+                    RabbitMQ 로 채우는 포인트는 AMQP, 계산으로 채우는 포인트는 DERIVED 로 지정해야
+                    gateway 기동 시 값이 null 로 덮이지 않습니다.
+                    """
+    )
+    //endregion
+    @GetMapping("/points/data-sources")
+    public ResponseEntity<ApiResponse<List<PointDataSourceResponse>>> getPointDataSources() {
+        List<PointDataSourceResponse> sources = Arrays.stream(PointDataSource.values())
+                .map(PointDataSourceResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("포인트 원천 소스 목록", sources));
     }
 
     //region 🔄 장비 정보 수정 명세서

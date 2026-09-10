@@ -1,5 +1,6 @@
 package com.mpole.hana.gateway.ingestion.dbview.view01.snapshot;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.common.constant.PointType;
 import com.mpole.hana.common.dto.XnPointData;
 
@@ -30,6 +31,8 @@ public final class PointSlot {
     private final String pointDisplayName;
     private final String unit;
     private final PointType pointType;
+    /** 값의 원천 수집 경로. null 은 하위호환으로 VIEW01 취급({@link PointDataSource#isView01Fed}). */
+    private final PointDataSource dataSource;
 
     // ── 값(가변) ───────────────────────────────
     private volatile String valueRaw;
@@ -39,7 +42,8 @@ public final class PointSlot {
 
     public PointSlot(Long deviceId, Long pointId, String pointKey,
                      String refDeviceCode, String refPointCode,
-                     String tagName, String pointDisplayName, String unit, PointType pointType) {
+                     String tagName, String pointDisplayName, String unit, PointType pointType,
+                     PointDataSource dataSource) {
         this.deviceId = deviceId;
         this.pointId = pointId;
         this.pointKey = pointKey;
@@ -49,6 +53,7 @@ public final class PointSlot {
         this.pointDisplayName = pointDisplayName;
         this.unit = unit;
         this.pointType = pointType;
+        this.dataSource = dataSource;
     }
 
     /**
@@ -117,6 +122,15 @@ public final class PointSlot {
 
     public OffsetDateTime updateDatetime() {
         return updateDatetime;
+    }
+
+    public PointDataSource dataSource() {
+        return dataSource;
+    }
+
+    /** 이 뷰 스냅샷 파이프라인이 값을 공급하는 칸인가(null=미지정은 하위호환으로 true). */
+    public boolean isViewFed() {
+        return PointDataSource.isView01Fed(dataSource);
     }
 
     private static boolean equalsNullable(String a, String b) {

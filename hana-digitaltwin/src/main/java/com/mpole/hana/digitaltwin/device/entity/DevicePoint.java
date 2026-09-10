@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.entity;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.global.repository.DateEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -62,6 +63,21 @@ public class DevicePoint extends DateEntity {
 
     @Column(name="point_type")
     private String pointType;
+
+    /**
+     * 이 포인트 값의 원천 수집 경로.
+     *
+     * <p>gateway 뷰 스냅샷 파이프라인이 이 값을 보고 자기가 소유하지 않은 포인트·장비를 걸러낸다.
+     * 명시하지 않으면(null) 하위호환으로 {@code VIEW01} 로 취급하므로, 컬럼 도입 후 백필 없이도
+     * 기존 동작이 유지된다.</p>
+     *
+     * <p>RabbitMQ 로 들어오는 부스 재실·물리버튼은 {@code AMQP}, 누적 카운트 같은 계산값은
+     * {@code DERIVED} 로 지정해야 gateway 기동 시 값이 null 로 덮이지 않는다.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "data_source", length = 32)
+    @Comment("포인트 값의 원천 수집 경로(VIEW01/VIEW02/MODBUS/TCP/AMQP/MANUAL/DERIVED/COMMAND). null 은 VIEW01 취급")
+    private PointDataSource dataSource;
 
     //private Boolean alarm;
 

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.HqsApiService;
-import com.mpole.hana.digitaltwin.integration.emblaze.hqs.HqsClient;
+import com.mpole.hana.digitaltwin.integration.emblaze.hqs.WcButtonService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -26,7 +26,7 @@ public class EmblazeMonitoringListeners {
 
     private final ObjectMapper objectMapper;
     private final HqsApiService hqsApiService;
-    private final HqsClient hqsClient;
+    private final WcButtonService wcButtonService; // 물리버튼: 로그 적재 + HQS 전송 + 파생 집계
     private final EnOceanIndexDeduplicator enOceanIndexDeduplicator; // onEnocean 중복수신 제거
 
     /** 공간(PIR 누적값) 메시지 → 재실 판정 입력 */
@@ -70,21 +70,26 @@ public class EmblazeMonitoringListeners {
             String switchNumber = status.path("switch_number").asText();
             if (!switchNumber.isEmpty()) {
                 log.info("상태 변화 감지: Switch 눌림 (Device: {}, Switch Number: {})", deviceUuid, switchNumber);
-                // TODO 실값 매핑(후속) — bldgId/florId/wcId/wcBoothId 하드코딩은 원본대로 유지
-                String result = hqsClient.postWcButton(Map.of(
-                        "bldgId", "aaaaa",
-                        "florId", "bbbbbb",
-                        "wcId", "ccccc",
-                        "wcBoothId", 9,
-                        "buttonType", switchNumber,
-                        "timestamp", timestamp
-                ));
-                log.info("HQS wcButton 호출 성공: {}", result);
+                // 로그 적재(정본) → HQS 전송(실제 부스 정보) → 파생 집계 갱신
+                wcButtonService.handleButtonPress(deviceUuid, switchNumber, timestamp);
             }
         } catch (JsonProcessingException e) {
             log.error("onEnocean 파싱 오류", e);
         } catch (Exception e) {
-            log.error("HQS wcButton 호출 중 오류: {}", e.getMessage());
+            log.error("onEnocean 처리 중 오류: {}", e.getMessage(), e);
         }
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // [보존] 기존 하드코딩 전송 — 부스 매핑 도입으로 대체됨. 참고용으로 남긴다.
+    // ────────────────────────────────────────────────────────────────
+    // String result = hqsClient.postWcButton(Map.of(
+    //         "bldgId", "aaaaa",
+    //         "florId", "bbbbbb",
+    //         "wcId", "ccccc",
+    //         "wcBoothId", 9,
+    //         "buttonType", switchNumber,
+    //         "timestamp", timestamp
+    // ));
+    // log.info("HQS wcButton 호출 성공: {}", result);
 }

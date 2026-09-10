@@ -17,10 +17,15 @@ public record DevicePointMappingItemResponse(
         String unit,
         Boolean active,
         String refDeviceCode,
-        String refPointCode
+        String refPointCode,
+        /** 값의 원천 수집 경로 코드. 미지정이면 null(= VIEW01 취급) */
+        String dataSource,
+        /** 화면 표시용 한글 라벨 */
+        String dataSourceLabel
 ) {
     public static DevicePointMappingItemResponse from(DevicePoint point) {
         Device device = point.getDevice();
+        com.mpole.hana.common.constant.PointDataSource source = point.getDataSource();
         String categoryPath = device != null && device.getCategory() != null
                 ? DeviceCategoryResponse.buildCategoryPath(device.getCategory())
                 : null;
@@ -38,7 +43,9 @@ public record DevicePointMappingItemResponse(
                 point.getUnit(),
                 point.getActive(),
                 point.getRefDeviceCode(),
-                point.getRefPointCode()
+                point.getRefPointCode(),
+                source != null ? source.name() : null,
+                source != null ? source.getLabel() : null
         );
     }
 }

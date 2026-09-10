@@ -4,14 +4,14 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 @Getter
 @AllArgsConstructor
 public enum DevicePropertyType {
     CCTV("CCTV"),
-    CHILLER("CHILLER"),
-    GATEWAY("GATEWAY"),
+    TOILET_BOOTH("TOILET_BOOTH"),
+    //CHILLER("CHILLER"),
+    //GATEWAY("GATEWAY"),
     GENERIC("GENERIC");
 
     private final String jsonName;
@@ -37,8 +37,9 @@ public enum DevicePropertyType {
     public Class<? extends DevicePropertyInfo> propertyClass() {
         return switch (this) {
             case CCTV -> CctvProperty.class;
-            case CHILLER -> ChillerProperty.class;
-            case GATEWAY -> GatewayProperty.class;
+            case TOILET_BOOTH -> ToiletBoothProperty.class;
+            //case CHILLER -> ChillerProperty.class;
+            //case GATEWAY -> GatewayProperty.class;
             case GENERIC -> GenericDeviceProperty.class;
         };
     }

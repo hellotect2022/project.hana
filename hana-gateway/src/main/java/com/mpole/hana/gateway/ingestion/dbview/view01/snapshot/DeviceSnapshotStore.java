@@ -1,5 +1,6 @@
 package com.mpole.hana.gateway.ingestion.dbview.view01.snapshot;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.common.constant.PointType;
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.common.dto.XnPointData;
@@ -103,7 +104,8 @@ public class DeviceSnapshotStore {
         return postgresDatabaseClient.sql("""
                         SELECT point_key, point_id, device_id,
                                ref_device_code, ref_point_code,
-                               tag_name, point_type, point_display_name, unit
+                               tag_name, point_type, point_display_name, unit,
+                               data_source
                         FROM tbl_device_point
                         """)
                 .map((row, meta) -> new PointRow(
@@ -115,7 +117,9 @@ public class DeviceSnapshotStore {
                         row.get("tag_name", String.class),
                         row.get("point_type", String.class),
                         row.get("point_display_name", String.class),
-                        row.get("unit", String.class)))
+                        row.get("unit", String.class),
+                        // 미지정(null)·미정의 문자열은 null → 하위호환으로 VIEW01 취급된다.
+                        PointDataSource.fromCode(row.get("data_source", String.class))))
                 .all()
                 .collectList();
     }
@@ -133,8 +137,8 @@ public class DeviceSnapshotStore {
                     row.deviceId(), row.pointId(), row.pointKey(),
                     row.refDeviceCode(), row.refPointCode(),
                     row.tagName(), row.pointDisplayName(), row.unit(),
-                    parsePointType(row.pointType())
-
+                    parsePointType(row.pointType()),
+                    row.dataSource()
             );
 
             // 이전 값 이월 — 없으면 미수집 상태로 시작
@@ -142,8 +146,10 @@ public class DeviceSnapshotStore {
 
             slotsByDevice.computeIfAbsent(row.deviceId(), k -> new ArrayList<>()).add(slot);
 
-            // ref 가 없는 포인트는 뷰에서 값이 오지 않는다(수동/MQTT 등) — 골격에는 남기고 신호 인덱스에서만 제외
-            if (row.refDeviceCode() != null && row.refPointCode() != null) {
+            // ref 가 없는 포인트는 뷰에서 값이 오지 않는다(수동 등) — 골격에는 남기고 신호 인덱스에서만 제외.
+            // data_source 가 이 파이프라인이 아닌 포인트(AMQP/DERIVED 등)도 제외한다 —
+            // ref 코드를 외부 시스템 식별자로 쓰더라도 뷰 신호와 같은 키 공간에 섞이면 안 된다.
+            if (row.refDeviceCode() != null && row.refPointCode() != null && slot.isViewFed()) {
                 newSignalIndex.computeIfAbsent(signalKey(row.refDeviceCode(), row.refPointCode()),
                         k -> new ArrayList<>()).add(slot);
             }
@@ -202,9 +208,25 @@ public class DeviceSnapshotStore {
         return bundles;
     }
 
-    /** 기동 직후 1회 전량 발행용 — 모든 장비를 dirty 로 표시한다(하류 초기 동기화). */
+    /**
+     * 기동 직후 1회 전량 발행용 — <b>이 파이프라인이 값을 공급하는 장비만</b> dirty 로 표시한다(하류 초기 동기화).
+     *
+     * <p>뷰 신호가 하나도 없는 장비(RabbitMQ 로 채우는 부스, 계산값만 있는 통계 장비 등)를 발행하면
+     * 값 없는 포인트가 그대로 나가고, 하류가 {@code points} 를 통째로 교체하므로
+     * <b>다른 경로가 써 둔 값이 null 로 덮인다.</b> {@code data_source} 로 소유권을 가른다.</p>
+     */
     public void markAllDirty() {
-        dirtyDeviceIds.addAll(deviceIndex.keySet());
+        int skipped = 0;
+        for (Map.Entry<Long, DeviceSnapshot> entry : deviceIndex.entrySet()) {
+            if (entry.getValue().hasViewFedPoint()) {
+                dirtyDeviceIds.add(entry.getKey());
+            } else {
+                skipped++;
+            }
+        }
+        if (skipped > 0) {
+            log.info("[Snapshot] 전량 발행 제외 {}대 — 뷰 신호가 없는 장비(data_source 가 이 파이프라인이 아님)", skipped);
+        }
     }
 
     public int deviceCount() {
@@ -265,7 +287,8 @@ public class DeviceSnapshotStore {
     private record PointRow(
             String pointKey, Long pointId, Long deviceId,
             String refDeviceCode, String refPointCode,
-            String tagName, String pointType, String pointDisplayName, String unit
+            String tagName, String pointType, String pointDisplayName, String unit,
+            PointDataSource dataSource
     ) {
     }
 }

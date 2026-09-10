@@ -46,7 +46,9 @@ spring:
           batch_size: 1000
         order_updates: true # update sql 정렬
         # PostgreSQL에 최적화된 쿼리를 생성하도록 방언 설정
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # PostgreSQLDialect 를 상속해 enum CHECK 제약 생성만 차단한 커스텀 방언.
+        # (global/config/NoEnumCheckPostgreSQLDialect.java 참고)
+        dialect: com.mpole.hana.digitaltwin.global.config.NoEnumCheckPostgreSQLDialect
         format_sql: true
         show_sql: true
         default_batch_fetch_size: 1000 # 보통 100~500 권장

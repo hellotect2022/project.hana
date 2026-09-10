@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointRefMappingRequest;
 import com.mpole.hana.digitaltwin.device.dto.PointMappingImportResult;
 import com.mpole.hana.digitaltwin.device.dto.PointMappingStatsResponse;
@@ -51,11 +52,17 @@ public class DevicePointMappingExcelService {
     private static final String COL_UNIT = "단위";
     private static final String COL_REF_DEVICE_CODE = "ref_device_code";
     private static final String COL_REF_POINT_CODE = "ref_point_code";
+    /**
+     * 값의 원천 수집 경로. 업로드에서는 <b>선택 컬럼</b>이다 —
+     * 컬럼이 없거나 셀이 비어 있으면 기존 값을 유지한다(비우지 않는다).
+     */
+    private static final String COL_DATA_SOURCE = "data_source";
 
     // 업로드는 헤더 '이름'으로 컬럼을 찾으므로(추가 컬럼 무시) 표시용 컬럼을 늘려도 import 는 무영향.
     private static final String[] HEADERS = {
             COL_DEVICE_NAME, COL_DEVICE_DESC, COL_CATEGORY, COL_TAG, COL_POINT_NAME, COL_POINT_DISPLAY_NAME,
-            COL_POINT_KEY, COL_POINT_TYPE, COL_UNIT, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE
+            COL_POINT_KEY, COL_POINT_TYPE, COL_UNIT, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE,
+            COL_DATA_SOURCE
     };
 
     private final DevicePointRepository devicePointRepository;
@@ -116,6 +123,7 @@ public class DevicePointMappingExcelService {
                 row.createCell(8).setCellValue(nvl(p.getUnit()));
                 row.createCell(9).setCellValue(nvl(p.getRefDeviceCode()));
                 row.createCell(10).setCellValue(nvl(p.getRefPointCode()));
+                row.createCell(11).setCellValue(p.getDataSource() != null ? p.getDataSource().name() : "");
             }
 
             for (int i = 0; i < HEADERS.length; i++) {
@@ -162,6 +170,9 @@ public class DevicePointMappingExcelService {
             int keyCol = colIndex.get(COL_POINT_KEY);
             int refDevCol = colIndex.get(COL_REF_DEVICE_CODE);
             int refPntCol = colIndex.get(COL_REF_POINT_CODE);
+            // 선택 컬럼 — 없으면 -1. 구버전 양식으로 업로드해도 그대로 동작한다.
+            Integer dataSourceColBoxed = colIndex.get(COL_DATA_SOURCE);
+            int dataSourceCol = dataSourceColBoxed != null ? dataSourceColBoxed : -1;
 
             for (int r = headerRow.getRowNum() + 1; r <= sheet.getLastRowNum(); r++) {
                 Row row = sheet.getRow(r);
@@ -171,12 +182,15 @@ public class DevicePointMappingExcelService {
                 String pointKey = trimToEmpty(readCell(row, keyCol, formatter));
                 String refDeviceCode = trimToEmpty(readCell(row, refDevCol, formatter));
                 String refPointCode = trimToEmpty(readCell(row, refPntCol, formatter));
+                String dataSource = dataSourceCol >= 0
+                        ? trimToEmpty(readCell(row, dataSourceCol, formatter))
+                        : "";
 
-                if (pointKey.isEmpty() && refDeviceCode.isEmpty() && refPointCode.isEmpty()) {
+                if (pointKey.isEmpty() && refDeviceCode.isEmpty() && refPointCode.isEmpty() && dataSource.isEmpty()) {
                     continue; // 완전 빈 행은 무시
                 }
                 // 사용자 표시용 행 번호(1-based)
-                parsedRows.add(new ParsedRow(r + 1, pointKey, refDeviceCode, refPointCode));
+                parsedRows.add(new ParsedRow(r + 1, pointKey, refDeviceCode, refPointCode, dataSource));
             }
         } catch (IOException e) {
             throw new IllegalArgumentException("엑셀 파일을 읽을 수 없습니다.", e);
@@ -225,10 +239,21 @@ public class DevicePointMappingExcelService {
 
             // 1:N 팬아웃 허용 — 같은 ref 조합을 여러 point 가 가질 수 있어 파일내/DB 조합중복 검사 제거(both-or-neither 유지)
 
+            // data_source 는 선택 입력 — 비어 있으면 null 로 넘겨 기존 값을 유지한다.
+            String dataSource = null;
+            if (!pr.dataSource().isEmpty()) {
+                if (PointDataSource.fromCode(pr.dataSource()) == null) {
+                    failed.add(fail(pr, "지원하지 않는 data_source 입니다: " + pr.dataSource()));
+                    continue;
+                }
+                dataSource = pr.dataSource();
+            }
+
             valid.add(new DevicePointRefMappingRequest(
                     point.getPointId(),
                     hasDevice ? pr.refDeviceCode() : null,
-                    hasPoint ? pr.refPointCode() : null
+                    hasPoint ? pr.refPointCode() : null,
+                    dataSource
             ));
         }
 
@@ -330,7 +355,9 @@ public class DevicePointMappingExcelService {
             int rowNumber,
             String pointKey,
             String refDeviceCode,
-            String refPointCode
+            String refPointCode,
+            /** 빈 문자열이면 "변경 없음"(기존 값 유지) */
+            String dataSource
     ) {
     }
 }

@@ -42,9 +42,7 @@ public class View01KafkaConsumer implements SmartLifecycle {
                     long prev = lastReceiveTime.getAndSet(now);
                     if (prev > 0) {
                         long receiveInterval = now - prev;
-                        log.info("[Kafka Metrics] 이전 batch 수신 후 다음 batch 수신까지 {}ms, batchSize={}",
-                                receiveInterval,
-                                recordList.size());
+                        //log.info("[Kafka Metrics] 이전 batch 수신 후 다음 batch 수신까지 {}ms, batchSize={}", receiveInterval, recordList.size());
                     } else {
                         log.info("[Kafka Metrics] 첫 batch 수신, batchSize={}", recordList.size());
                     }

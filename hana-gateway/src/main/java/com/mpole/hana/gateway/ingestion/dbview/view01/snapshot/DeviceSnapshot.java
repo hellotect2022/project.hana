@@ -54,4 +54,15 @@ public record DeviceSnapshot(
     public long uncollectedCount() {
         return slots.stream().filter(PointSlot::isUncollected).count();
     }
+
+    /**
+     * 이 뷰 파이프라인이 값을 공급하는 포인트를 하나라도 가졌는가.
+     *
+     * <p>기동 시 전량 발행({@code markAllDirty})의 대상 판정에 쓴다. 뷰 신호가 하나도 없는 장비
+     * (RabbitMQ 로 채우는 부스, 계산값만 있는 통계 장비 등)를 발행하면 값 없는 포인트가 그대로 나가
+     * 하류에서 그 장비의 {@code points} 가 null 로 덮인다.</p>
+     */
+    public boolean hasViewFedPoint() {
+        return slots.stream().anyMatch(PointSlot::isViewFed);
+    }
 }
