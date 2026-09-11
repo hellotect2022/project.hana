@@ -1,4 +1,4 @@
-package com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto;
+package com.mpole.hana.digitaltwin.integration.emblaze.hqs.wc.dto;
 
 import jakarta.validation.constraints.NotBlank;
 

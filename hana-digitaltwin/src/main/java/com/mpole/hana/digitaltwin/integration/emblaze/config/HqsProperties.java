@@ -24,14 +24,43 @@ public class HqsProperties {
     private int timeoutMs = 3000;
 
     /**
-     * 재실 → 퇴실 가정 전환 임계(ms). sweep 이 {@code now - lastMotionAt > 이 값} 인 재실 부스를 "0" 으로 전환한다.
+     * 재실 → 퇴실 판정 임계(ms). <b>마지막 움직임 이후</b> 이만큼 지난 부스는 조회에서 0(비어있음)으로 읽는다.
+     *
+     * <p>예전에는 스케줄러가 이 값으로 DB 에 "0" 을 써 넣었지만, 지금은 조회 쿼리가
+     * {@code now - occ.updateDatetime} 과 비교해 <b>계산</b>한다 — 스케줄러도 메모리 상태도 없다.</p>
+     *
      * <p>원본 하드코딩 10초(vacancy-assumtion-ms)는 화장실 재실 특성상 과도(움직임 없는 재실자 오탈락)하여
-     * 기본 60초로 상향한다.</p>
+     * 기본 60초로 상향한다. 센서가 죽어 메시지가 끊긴 경우도 같은 검사에 걸린다.</p>
+     *
+     * <p>{@code 0} 이하면 시간 검사를 하지 않는다(마지막 기록값을 그대로 노출).</p>
      */
     private long vacancyTimeoutMs = 60000L;
 
-    /** sweep 스케줄 주기(ms). {@code @Scheduled(fixedDelayString)} 에서도 동일 placeholder 로 참조. */
-    private long sweepIntervalMs = 5000L;
+    // [보존] 퇴실 sweep 스케줄 주기 — 조회 시점 계산으로 바뀌어 스케줄러가 사라졌다.
+    // private long sweepIntervalMs = 5000L;
+
+    /**
+     * HQS 로 보낼 건물 식별자({@code wcButton} 페이로드의 {@code bldgId}).
+     * <p>대상 건물이 하나뿐이라 상수로 둔다. 비어 있으면 전송 시 경고만 남기고 빈 값으로 보낸다.</p>
+     */
+    private String buildingId = "1";
+
+    /**
+     * 물리버튼 누적 카운트를 기록할 통계 장비의 {@code device_key}.
+     * <p>비어 있거나 해당 장비가 없으면 카운트를 건너뛴다(HQS 전송은 계속된다).</p>
+     */
+    private String statsDeviceKey = "";
+
+    /**
+     * HQS 호출용 access token ({@code Authorization: Bearer <token>}).
+     *
+     * <p>명세상 login 으로 발급받는 값인데 <b>login API 명세를 아직 받지 못해</b> 자동 발급을
+     * 구현할 수 없다. 그때까지는 발급받은 토큰을 여기(또는 환경변수)에 넣어 쓴다.
+     * 비어 있으면 Authorization 없이 호출하고 경고를 남긴다.</p>
+     *
+     * <p><b>토큰은 자격증명이다</b> — yml 에 평문으로 커밋하지 말고 환경변수로 주입할 것.</p>
+     */
+    private String accessToken = "";
 
     @Getter
     @Setter

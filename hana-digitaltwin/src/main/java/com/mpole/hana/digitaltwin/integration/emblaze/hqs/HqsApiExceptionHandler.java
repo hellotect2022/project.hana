@@ -9,11 +9,17 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * {@link HqsApiController} 및 동일 패키지 내 REST 컨트롤러 예외를 HQS 응답 형식으로 변환.
- * <p>basePackageClasses 로 이 컨트롤러 패키지에만 한정한다(전역 핸들러와 분리).</p>
+ * HQS 연동 REST 컨트롤러 예외를 HQS 응답 형식({@code code/message/timestamp/data})으로 변환.
+ *
+ * <p><b>범위를 {@code hqs} 패키지 전체로 잡는다.</b> 도메인별로 하위 패키지(`wc`, `charger`,
+ * `screen`)를 나눴기 때문에, 예전처럼 {@code basePackageClasses = HqsApiController.class} 로 두면
+ * 그 컨트롤러가 있는 {@code wc} 만 걸리고 <b>나머지 도메인은 전역 핸들러로 새어나가</b>
+ * HQS 가 기대하는 봉투가 아닌 응답을 받게 된다.</p>
+ *
+ * <p>전역 핸들러와는 이 패키지 경계로 분리된다.</p>
  */
 @Slf4j
-@RestControllerAdvice(basePackageClasses = HqsApiController.class)
+@RestControllerAdvice(basePackages = "com.mpole.hana.digitaltwin.integration.emblaze.hqs")
 public class HqsApiExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

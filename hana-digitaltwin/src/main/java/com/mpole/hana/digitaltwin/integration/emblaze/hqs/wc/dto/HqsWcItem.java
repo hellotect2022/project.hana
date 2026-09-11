@@ -1,4 +1,4 @@
-package com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto;
+package com.mpole.hana.digitaltwin.integration.emblaze.hqs.wc.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,9 +11,9 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HqsBoothStatusData {
+public class HqsWcItem {
 
-    private String bldgId;
-    private String florId;
-    private List<HqsWcItem> wcList;
+    private String wcId;
+    private String gender;
+    private List<HqsWcBoothItem> wcBoothList;
 }

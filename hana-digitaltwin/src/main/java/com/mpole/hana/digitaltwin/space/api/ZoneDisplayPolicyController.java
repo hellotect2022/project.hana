@@ -62,9 +62,9 @@ public class ZoneDisplayPolicyController {
     }
 
     /** 표현정책 삭제 */
-    @DeleteMapping("/{policyId}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long policyId) {
-        service.delete(policyId);
+    @DeleteMapping("/{ruleId}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long ruleId) {
+        service.delete(ruleId);
         return ResponseEntity.ok(ApiResponse.success("표현정책 삭제"));
     }
 }

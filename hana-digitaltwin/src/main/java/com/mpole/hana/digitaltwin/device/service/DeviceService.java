@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.device.service;
 
 import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.command.repository.CommandPointRepository;
+import com.mpole.hana.digitaltwin.location.service.ZoneCascadeService;
 import com.mpole.hana.digitaltwin.device.dto.BulkActiveRequest;
 import com.mpole.hana.digitaltwin.device.dto.CctvCameraResponse;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingItemResponse;
@@ -72,6 +73,8 @@ public class DeviceService {
     private final SystemDiagramWiringRepository systemDiagramWiringRepository;
     private final DeviceCurrentValueRepository deviceCurrentValueRepository;
     private final DeviceInfraRepository deviceInfraRepository;
+    /** 구역 계층 — 구역 필터를 하위 구역까지 펼친다 */
+    private final ZoneCascadeService zoneCascadeService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -422,9 +425,22 @@ public class DeviceService {
         updateDevicePointRefMappings(updates);
     }
 
+    /**
+     * 층·구역별 장비 목록 — <b>선택한 구역의 하위 구역까지 포함</b>한다.
+     *
+     * <p>구역 계층(화장실 &gt; 부스) 도입에 따른 것이다. 화장실을 골랐는데 그 안 부스의
+     * 장비가 안 나오면 사용자 기대와 어긋난다 — 카테고리 필터가 대분류 선택 시 하위
+     * 소분류로 확장되는 것과 같은 규칙이다.</p>
+     *
+     * <p>자식 구역이 없으면 서브트리가 자기 자신뿐이라 기존과 동일하게 동작한다.</p>
+     */
     @Transactional(readOnly = true)
     public List<DeviceResponse> getSearchDevices(Long floorId, Long zoneId) {
-        return mapWithCommandPoints(deviceRepository.fetchSearchDevices(floorId, zoneId));
+        List<Long> zoneIds = zoneCascadeService.resolveSubtreeZoneIds(zoneId);
+        if (zoneIds != null && zoneIds.isEmpty()) {
+            return List.of(); // 존재하지 않는 구역 — IN () 은 SQL 오류라 여기서 단락시킨다
+        }
+        return mapWithCommandPoints(deviceRepository.fetchSearchDevices(floorId, zoneIds));
     }
 
     @Transactional(readOnly = true)

@@ -68,15 +68,26 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
             Pageable pageable
     );
 
+    /**
+     * 층·구역 기준 장비 조회.
+     *
+     * <p><b>구역은 단건이 아니라 목록을 받는다</b> — 구역에 계층이 생겨서(화장실 &gt; 부스)
+     * 화장실을 고르면 그 안 부스에 배치된 장비도 나와야 하기 때문이다.
+     * 호출부가 {@code ZoneCascadeService.resolveSubtreeZoneIds()} 로 펼쳐 넘긴다.</p>
+     *
+     * @param zoneIds null 이면 구역 필터 없음. <b>빈 목록을 넘기지 말 것</b> —
+     *                {@code IN ()} 은 SQL 오류다. 호출부에서 0건으로 단락시킨다
+     */
     @Query("""
         SELECT d FROM Device d
         LEFT JOIN FETCH d.placement p
         LEFT JOIN FETCH p.unityZone z
         WHERE (:floorId IS NULL OR z.floor.floorId = :floorId)
-          AND (:zoneId IS NULL OR z.zoneId = :zoneId)
+          AND (:zoneIds IS NULL OR z.zoneId IN :zoneIds)
         ORDER BY d.deviceId ASC
         """)
-    List<Device> fetchSearchDevices(@Param("floorId") Long floorId, @Param("zoneId") Long zoneId);
+    List<Device> fetchSearchDevices(@Param("floorId") Long floorId,
+                                    @Param("zoneIds") Collection<Long> zoneIds);
 
     @Query("""
             SELECT d 

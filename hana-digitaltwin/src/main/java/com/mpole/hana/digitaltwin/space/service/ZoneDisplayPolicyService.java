@@ -125,21 +125,21 @@ public class ZoneDisplayPolicyService {
     public void saveAll(List<ZonePolicyUpdateItem> items) {
         if (items == null || items.isEmpty()) return;
         Map<Long, ZoneDisplayPolicy> byId = policyRepository.findAllById(
-                        items.stream().map(ZonePolicyUpdateItem::policyId).toList()).stream()
-                .collect(Collectors.toMap(ZoneDisplayPolicy::getPolicyId, Function.identity()));
+                        items.stream().map(ZonePolicyUpdateItem::ruleId).toList()).stream()
+                .collect(Collectors.toMap(ZoneDisplayPolicy::getRuleId, Function.identity()));
 
         for (ZonePolicyUpdateItem item : items) {
-            ZoneDisplayPolicy p = byId.get(item.policyId());
+            ZoneDisplayPolicy p = byId.get(item.ruleId());
             if (p == null) continue;
             p.updatePolicy(item.displayName(), item.colorCode(), item.opacity(), item.active(), item.evacuationAutoShow());
         }
     }
 
     @Transactional
-    public void delete(Long policyId) {
-        if (!policyRepository.existsById(policyId)) {
-            throw new EntityNotFoundException("표현정책이 존재하지 않습니다. id=" + policyId);
+    public void delete(Long ruleId) {
+        if (!policyRepository.existsById(ruleId)) {
+            throw new EntityNotFoundException("표현정책이 존재하지 않습니다. id=" + ruleId);
         }
-        policyRepository.deleteById(policyId);
+        policyRepository.deleteById(ruleId);
     }
 }

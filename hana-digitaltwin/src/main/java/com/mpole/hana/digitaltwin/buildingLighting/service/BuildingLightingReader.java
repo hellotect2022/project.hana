@@ -8,6 +8,7 @@ import com.mpole.hana.digitaltwin.buildingLighting.domain.LightingState;
 import com.mpole.hana.digitaltwin.buildingLighting.repository.LightingDeviceRepository;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DevicePlacement;
+import com.mpole.hana.digitaltwin.location.service.ZoneCascadeService;
 import com.mpole.hana.digitaltwin.location.entity.UnityLocFloor;
 import com.mpole.hana.digitaltwin.location.entity.UnityLocZone;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
@@ -32,6 +33,8 @@ public class BuildingLightingReader {
     private final DeviceSystemRepository deviceSystemRepository;
     private final LightingDeviceRepository lightingDeviceRepository;
     private final BuildingLightingProperties props;
+    /** 구역 계층 — 화장실 구역을 고르면 그 안 부스까지 펼쳐서 조회한다 */
+    private final ZoneCascadeService zoneCascadeService;
 
     /**
      * 건물조명 시스템에 매핑된 소분류 카테고리 ID 목록.
@@ -68,13 +71,29 @@ public class BuildingLightingReader {
         return toReadings(lightingDeviceRepository.fetchForLightingByFloor(categoryIds, floorId));
     }
 
+    /**
+     * 구역 기준 조회 — <b>하위 구역까지 포함</b>한다.
+     *
+     * <p>구역에 계층이 생겨서(화장실 &gt; 부스) 화장실을 고르면 그 안 부스에 배치된 조명도
+     * 나와야 한다. 카테고리 필터가 대분류를 고르면 하위 소분류로 확장되는 것과 같은 기대다.</p>
+     *
+     * <p>자식 구역이 없으면 서브트리가 자기 자신 하나뿐이라 <b>기존과 동일하게 동작</b>한다.</p>
+     */
     @Transactional(readOnly = true)
     public List<LightingReading> readByZone(Long zoneId) {
         List<Long> categoryIds = resolveCategoryIds();
         if (categoryIds.isEmpty()) {
             return List.of();
         }
-        return toReadings(lightingDeviceRepository.fetchForLightingByZone(categoryIds, zoneId));
+        List<Long> zoneIds = zoneCascadeService.resolveSubtreeZoneIds(zoneId);
+        // null = 필터 없음(zoneId 가 null), 빈 목록 = 존재하지 않는 구역 → 결과 0건
+        if (zoneIds == null) {
+            return toReadings(lightingDeviceRepository.fetchForLighting(categoryIds));
+        }
+        if (zoneIds.isEmpty()) {
+            return List.of();
+        }
+        return toReadings(lightingDeviceRepository.fetchForLightingByZoneIds(categoryIds, zoneIds));
     }
 
     private List<LightingReading> toReadings(List<Device> devices) {

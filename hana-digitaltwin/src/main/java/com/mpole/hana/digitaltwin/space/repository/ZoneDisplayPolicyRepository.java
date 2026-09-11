@@ -16,7 +16,7 @@ public interface ZoneDisplayPolicyRepository extends JpaRepository<ZoneDisplayPo
             JOIN FETCH z.floor f
             JOIN FETCH f.building b
             WHERE p.systemType = :systemType
-            ORDER BY p.policyId
+            ORDER BY p.ruleId
             """)
     List<ZoneDisplayPolicy> findAllBySystemTypeWithZone(@Param("systemType") ZoneSystemType systemType);
 

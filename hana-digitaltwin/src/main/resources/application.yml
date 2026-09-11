@@ -137,8 +137,8 @@ hdt:
       paths:
         wc-button: /api/v1/wc/button          # 화장실 무선버튼(EnOcean) 이벤트 전송 경로
       timeout-ms: 3000
-      vacancy-timeout-ms: 60000               # 재실→퇴실 가정 임계(sweep). 원본 10s→60s 상향(정지 재실자 오탈락 방지)
-      sweep-interval-ms: 5000                 # 퇴실 sweep 스케줄 주기
+      vacancy-timeout-ms: 60000               # 마지막 움직임 이후 이만큼 지나면 퇴실로 본다(조회 시점 계산). 0=시간검사 없음
+      access-token: ${HQS_ACCESS_TOKEN:}      # HQS 호출용 Bearer 토큰. 자격증명이므로 평문 커밋 금지 — 환경변수로 주입
     emblaze:
       enabled: true                          # true 여야 RabbitMQ 수신 config/listener 기동. 실브로커 접속정보 확인 후 전환
       rabbit:
