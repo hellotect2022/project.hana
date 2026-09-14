@@ -4,6 +4,7 @@ import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.common.constant.PointType;
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.common.dto.XnPointData;
+import com.mpole.hana.gateway.ingestion.dbview.view01.View01BundleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -50,7 +51,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DeviceSnapshotStore {
 
     /** point_key 에서 device_key 를 유도할 때 자를 언더스코어 개수(기존 번들 로직과 동일 규칙). */
-    private static final int DEVICE_KEY_UNDERSCORE_COUNT = 4;
+    // [보존] 앞쪽 언더스코어 개수 기준 — deriveDeviceKey 가 태그명 기준으로 바뀌어 불필요.
+    // private static final int DEVICE_KEY_UNDERSCORE_COUNT = 4;
 
     private final DatabaseClient postgresDatabaseClient;
 
@@ -258,10 +260,13 @@ public class DeviceSnapshotStore {
         }
     }
 
-    /** point_key 앞부분에서 device_key 를 유도한다(기존 번들 로직과 동일 규칙). */
+    /**
+     * {@code point_key} 에서 {@code device_key} 를 되돌린다(번들 로직과 동일 규칙).
+     * <p>자세한 근거는 {@link View01BundleService#deriveDeviceKey(String, String)} 참고.</p>
+     */
     private static String deriveDeviceKey(List<PointSlot> slots) {
         for (PointSlot slot : slots) {
-            String derived = cutByUnderscore(slot.pointKey(), DEVICE_KEY_UNDERSCORE_COUNT);
+            String derived = View01BundleService.deriveDeviceKey(slot.pointKey(), slot.tagName());
             if (derived != null && !derived.isBlank()) {
                 return derived;
             }
@@ -269,19 +274,28 @@ public class DeviceSnapshotStore {
         return null;
     }
 
-    static String cutByUnderscore(String value, int underscoreCount) {
-        if (value == null || value.isEmpty()) {
-            return value;
-        }
-        int pos = -1;
-        for (int i = 0; i < underscoreCount; i++) {
-            pos = value.indexOf('_', pos + 1);
-            if (pos == -1) {
-                return value;
-            }
-        }
-        return value.substring(0, pos);
-    }
+    // ────────────────────────────────────────────────────────────────
+    // [보존] 앞쪽 언더스코어 N 개까지 자르던 방식 — 잘못된 가정이라 폐기했다.
+    //
+    //  "대_중_소_이름" 이 정확히 4토막이라고 봤는데 실제로는
+    //    · 장비명에 _ 가 들어간다 (전체의 21%, 예: F011_M165)
+    //    · 카테고리 코드에도 들어간다 (ELV_GR, MRS_CONTROL)
+    //  그래서 ELEC_EE_MRS_F011_M165 가 ELEC_EE_MRS_F011 로 잘려
+    //  서로 다른 장비가 같은 device_key 를 갖게 됐다.
+    // ────────────────────────────────────────────────────────────────
+    // static String cutByUnderscore(String value, int underscoreCount) {
+    //     if (value == null || value.isEmpty()) {
+    //         return value;
+    //     }
+    //     int pos = -1;
+    //     for (int i = 0; i < underscoreCount; i++) {
+    //         pos = value.indexOf('_', pos + 1);
+    //         if (pos == -1) {
+    //             return value;
+    //         }
+    //     }
+    //     return value.substring(0, pos);
+    // }
 
     /** tbl_device_point 한 행(로드 전용 내부 타입). */
     private record PointRow(

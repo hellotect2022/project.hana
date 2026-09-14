@@ -120,6 +120,11 @@ public final class PointSlot {
         return pointKey;
     }
 
+    /** point_key 끝에 붙어 있는 태그명. device_key 를 되돌릴 때 이 길이만큼 뒤에서 뗀다. */
+    public String tagName() {
+        return tagName;
+    }
+
     public OffsetDateTime updateDatetime() {
         return updateDatetime;
     }
