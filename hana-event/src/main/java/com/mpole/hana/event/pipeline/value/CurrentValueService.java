@@ -85,7 +85,7 @@ public class CurrentValueService {
         var time = System.currentTimeMillis();
         return postgresDatabaseClient.sql(sql)
                 .then()
-                //.doOnSuccess(a->log.info("db insert 하는데 걸린시간 ㅎㅎ ㅜㅜ {}ms",System.currentTimeMillis()- time))
+                .doOnSuccess(a->log.info("db insert 하는데 걸린시간 ㅎㅎ ㅜㅜ {}ms",System.currentTimeMillis()- time))
                 .doOnError(e -> log.error("Bulk Upsert 실행 중 DB 에러: {}", e.getMessage()));
     }
 }

@@ -3,6 +3,8 @@ package com.mpole.hana.digitaltwin.integration.emblaze.hqs;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.code.HqsResponseCode;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * <p>전역 핸들러와는 이 패키지 경계로 분리된다.</p>
  */
 @Slf4j
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackages = "com.mpole.hana.digitaltwin.integration.emblaze.hqs")
 public class HqsApiExceptionHandler {
 

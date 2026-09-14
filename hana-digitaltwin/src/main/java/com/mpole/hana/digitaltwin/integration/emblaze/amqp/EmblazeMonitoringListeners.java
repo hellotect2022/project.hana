@@ -94,7 +94,7 @@ public class EmblazeMonitoringListeners {
     @RabbitListener(queues = MonitoringQueue.Names.ENOCEAN, containerFactory = "monitoringContainerFactory")
     public void onEnocean(String body) {
         try {
-            log.info("onEnocean : {}",body);
+            log.info("[{}] : {}",MonitoringQueue.Names.ENOCEAN,body);
             JsonNode node = objectMapper.readTree(body);
             String deviceUuid = node.path("device_uuid").asText(null);
             JsonNode status = node.get("status");
@@ -117,7 +117,7 @@ public class EmblazeMonitoringListeners {
             // ② HQS 전송 + 요청 종류별 누적 집계
             String switchNumber = status.path("switch_number").asText();
             if (!switchNumber.isEmpty()) {
-                log.info("Switch 눌림 device={} switch_number={}", deviceUuid, switchNumber);
+                log.info("[{}] Switch 눌림 device={} switch_number={}",MonitoringQueue.Names.ENOCEAN, deviceUuid, switchNumber);
                 wcButtonService.handleButtonPress(deviceUuid, switchNumber, eventAt);
             }
         } catch (JsonProcessingException e) {

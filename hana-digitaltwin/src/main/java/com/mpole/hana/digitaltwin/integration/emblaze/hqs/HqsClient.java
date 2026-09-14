@@ -72,9 +72,10 @@ public class HqsClient {
      * @param isRetry 재시도 호출인지 — 로그 구분용
      */
     private HqsOutboundResponse exchange(String url, Object body, String trxId, boolean isRetry) {
+        // 토큰이 없으면 여기서 로그인이 일어난다(HqsTokenProvider.currentToken).
         String token = tokenProvider.currentToken();
         if (!StringUtils.hasText(token)) {
-            log.warn("hdt.integration.hqs.access-token 미설정 — Authorization 없이 호출한다(인증 실패 예상)");
+            log.warn("HQS 토큰 확보 실패(로그인 실패) — Authorization 없이 호출한다. 인증 오류가 예상된다");
         }
 
         try {

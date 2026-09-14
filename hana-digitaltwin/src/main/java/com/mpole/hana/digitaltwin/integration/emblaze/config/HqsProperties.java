@@ -62,10 +62,29 @@ public class HqsProperties {
      */
     private String accessToken = "";
 
+    /** HQS 로그인 자격증명. 이 값으로 받은 JWT 를 이후 호출의 Authorization 에 싣는다. */
+    private Login login = new Login();
+
     @Getter
     @Setter
     public static class Paths {
+        /** 로그인(JWT 발급) 경로 — 이 호출에는 Authorization 을 붙이지 않는다. */
+        private String login = "/api/v1/login/external";
+
         /** 무선버튼(EnOcean) 이벤트 전송 경로 */
-        private String wcButton = "/api/v1/wc/button";
+        private String wcButton = "/inbound/device/api/v1/wcinfo/alarm";
+    }
+
+    @Getter
+    @Setter
+    public static class Login {
+        /** 시스템구분명 — HQS 가 발급한 값 */
+        private String clientId = "";
+
+        /**
+         * 시스템구분값(비밀키).
+         * <p><b>자격증명이다.</b> 값이 바뀌면 코드가 아니라 설정에서 교체한다.</p>
+         */
+        private String clientValue = "";
     }
 }

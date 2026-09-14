@@ -133,9 +133,13 @@ hdt:
       timeout-ms: 3000
       token-response-field: accessToken
     hqs:
-      base-url: http://192.168.10.218:8000
+      base-url: http://10.167.136.155:18080   # HQS 운영 서버
       paths:
-        wc-button: /api/v1/wc/button          # 화장실 무선버튼(EnOcean) 이벤트 전송 경로
+        login: /api/v1/login/external         # JWT 발급. 이 호출만 Authorization 없이 나간다
+        wc-button: /inbound/device/api/v1/wcinfo/alarm   # 화장실 물리버튼 알림 전송 경로
+      login:
+        client-id: hqs-access-control
+        client-value: ${HQS_CLIENT_VALUE:g2KCx0e4mSL2jv+rfl2+MHD4DWv/cHu08TBInQCAGhs=}  # 자격증명 — 운영은 환경변수로 덮어쓸 것
       timeout-ms: 3000
       vacancy-timeout-ms: 60000               # 마지막 움직임 이후 이만큼 지나면 퇴실로 본다(조회 시점 계산). 0=시간검사 없음
       access-token: ${HQS_ACCESS_TOKEN:}      # HQS 호출용 Bearer 토큰. 자격증명이므로 평문 커밋 금지 — 환경변수로 주입

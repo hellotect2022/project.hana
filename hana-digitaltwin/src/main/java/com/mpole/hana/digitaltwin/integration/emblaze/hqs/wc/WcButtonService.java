@@ -4,6 +4,7 @@ import com.mpole.hana.common.dto.XnPointData;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.AmqpPointMappingCache;
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.AmqpPointTarget;
+import com.mpole.hana.digitaltwin.integration.emblaze.amqp.MonitoringQueue;
 import com.mpole.hana.digitaltwin.integration.emblaze.config.HqsProperties;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.HqsClient;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsOutboundResponse;
@@ -81,13 +82,13 @@ public class WcButtonService {
     public void handleButtonPress(String deviceUuid, String switchNumber, OffsetDateTime pressedAt) {
         WcButtonType type = WcButtonType.fromSwitchNumber(switchNumber);
         if (type == null) {
-            log.warn("정의되지 않은 switch_number='{}' device={}", switchNumber, deviceUuid);
+            log.warn("[{}] 정의되지 않은 switch_number='{}' device={}", MonitoringQueue.Names.ENOCEAN, switchNumber, deviceUuid);
             return;
         }
 
         AmqpPointTarget target = amqpPointMappingCache.resolve(deviceUuid, FIELD_SWITCH);
         if (target == null) {
-            log.warn("매핑 없는 물리버튼 uuid={} (tbl_device_point.ref_device_code 등록 필요)", deviceUuid);
+            log.warn("[{}] 매핑 없는 물리버튼 uuid={} (tbl_device_point.ref_device_code 등록 필요)",MonitoringQueue.Names.ENOCEAN, deviceUuid);
             return;
         }
 

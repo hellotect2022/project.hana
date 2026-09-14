@@ -42,6 +42,13 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // ── HQS 연동 ──────────────────────────────────────────────
+                        // 아래 "/api/**" permitAll 보다 반드시 위에 있어야 한다.
+                        // Spring Security 는 먼저 매칭된 규칙이 이기므로, 순서를 바꾸면
+                        // 이 규칙들이 통째로 무시되고 HQS API 가 다시 무인증으로 열린다.
+                        .requestMatchers("/api/v1/hqs/login/external").permitAll()   // 토큰 발급 — 인증 전 호출
+                        .requestMatchers("/api/v1/hqs/**").hasAnyRole("ADMIN", "HQS") // HQS 용
+                        // ──────────────────────────────────────────────────────────
                         .requestMatchers(
                                 "/api/device-system/roles/**",
                                 "/api/auth/change-password",

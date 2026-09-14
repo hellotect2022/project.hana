@@ -21,7 +21,7 @@ import java.util.List;
  * 그 구역의 {@code zone_code} 가 {@code stationId} 다.</p>
  */
 @RestController
-@RequestMapping("/api/v1/charger")
+@RequestMapping("/api/v1/hqs/charger")
 @RequiredArgsConstructor
 @Tag(name = "HQS-Charger", description = "HQS 연동 — 전기차 충전기 조회")
 public class ChargerApiController {

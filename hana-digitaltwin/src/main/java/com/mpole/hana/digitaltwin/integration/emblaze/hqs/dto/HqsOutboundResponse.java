@@ -11,13 +11,22 @@ import com.mpole.hana.digitaltwin.integration.emblaze.hqs.code.HqsResponseCode;
  *
  * <p>HTTP 200 이어도 {@code code} 가 "0" 이 아니면 실패다 — 상태코드만 보고 성공으로 판단하면
  * 인증 만료·중복 같은 실패가 조용히 묻힌다.</p>
+ *
+ * <h3>본문 필드가 API 마다 다르다</h3>
+ * <pre>
+ *   로그인      {"code","message","data",  "timestamp"}   data 에 JWT
+ *   wcButton   {"code","message","result","timestamp"}   result 에 처리 결과
+ * </pre>
+ * <p>봉투(code·message·timestamp)가 같아 한 레코드로 받는다. 쓰지 않는 쪽은 null 로 남고,
+ * {@code @JsonIgnoreProperties(ignoreUnknown = true)} 라 모르는 필드가 와도 깨지지 않는다.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record HqsOutboundResponse(
         String code,
         String message,
         String timestamp,
-        String result
+        String result,
+        String data
 ) {
 
     /** 정상 처리 여부. {@code code} 가 없으면(응답 형식이 다르면) 실패로 본다. */
