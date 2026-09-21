@@ -25,7 +25,7 @@ public class UnityZoneService {
     /** 층 선택용 옵션 목록 */
     @Transactional(readOnly = true)
     public List<UnityFloorOptionResponse> getFloorOptions() {
-        return floorRepository.findAllByOrderByFloorNumAsc().stream()
+        return floorRepository.findAllByOrderBySortOrderAsc().stream()
                 .map(UnityFloorOptionResponse::from)
                 .toList();
     }
@@ -122,12 +122,12 @@ public class UnityZoneService {
         if (meshName == null) {
             throw new IllegalArgumentException("mesh_name 은 필수입니다.");
         }
-        boolean taken = (selfZoneId == null)
-                ? zoneRepository.existsByZoneMeshName(meshName)
-                : zoneRepository.existsByZoneMeshNameAndZoneIdNot(meshName, selfZoneId);
-        if (taken) {
-            throw new IllegalStateException("이미 사용 중인 mesh_name 입니다: " + meshName);
-        }
+//        boolean taken = (selfZoneId == null)
+//                ? zoneRepository.existsByZoneMeshName(meshName)
+//                : zoneRepository.existsByZoneMeshNameAndZoneIdNot(meshName, selfZoneId);
+//        if (taken) {
+//            throw new IllegalStateException("이미 사용 중인 mesh_name 입니다: " + meshName);
+//        }
     }
 
     /** zone_code 중복 검사. null 은 제외(부분 유니크 인덱스와 동일 규칙). */

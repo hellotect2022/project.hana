@@ -50,6 +50,9 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
                 OR LOWER(COALESCE(c.categoryName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR CONCAT('', d.deviceId) LIKE CONCAT('%', :keyword, '%'))
               AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
+              AND (:hasCommandPoint IS NULL OR :hasCommandPoint = FALSE
+                OR EXISTS (SELECT 1 FROM CommandPoint cp
+                            WHERE cp.device = d AND cp.active = TRUE))
             """,
             countQuery = """
             SELECT COUNT(DISTINCT d) FROM Device d
@@ -60,11 +63,20 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
                 OR LOWER(COALESCE(c.categoryName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR CONCAT('', d.deviceId) LIKE CONCAT('%', :keyword, '%'))
               AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
+              AND (:hasCommandPoint IS NULL OR :hasCommandPoint = FALSE
+                OR EXISTS (SELECT 1 FROM CommandPoint cp
+                            WHERE cp.device = d AND cp.active = TRUE))
             """
     )
     Page<Device> searchDevices(
             @Param("keyword") String keyword,
             @Param("categoryIds") Collection<Long> categoryIds,
+            /**
+             * true 면 <b>활성 제어 포인트가 있는 장비만</b> 반환한다(디바이스 제어 화면 전용).
+             * null/false 면 조건에서 빠져 기존 동작 그대로다 — 다른 소비처는 영향받지 않는다.
+             * 클라이언트에서 거르면 페이지당 20건을 받아 몇 건만 남아 페이징이 깨지므로 서버에서 건다.
+             */
+            @Param("hasCommandPoint") Boolean hasCommandPoint,
             Pageable pageable
     );
 
@@ -111,8 +123,6 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
     Page<Device> fetchByCategoryIds(@Param("categoryIds") Collection<Long> categoryIds, Pageable pageable);
 
     long countByCategory_CategoryId(Long categoryId);
-
-    long countByUnityAsset_AssetId(Long assetId);
 
     boolean existsByDeviceKey(String deviceKey);
  

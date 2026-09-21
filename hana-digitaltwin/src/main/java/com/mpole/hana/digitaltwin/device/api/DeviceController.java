@@ -107,9 +107,11 @@ public class DeviceController {
     public ResponseEntity<ApiResponse<ApiResponse.PageResponse<DeviceResponse>>> getAllDevices(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long categoryId,
+            @Parameter(description = "true 면 활성 제어 포인트가 있는 장비만 반환(디바이스 제어 화면)")
+            @RequestParam(required = false) Boolean hasCommandPoint,
             @Parameter(hidden = true) @PageableDefault(size = 20, sort = "deviceId", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, pageable);
+        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, hasCommandPoint, pageable);
 
         return ResponseEntity.ok(ApiResponse.success("장비 목록 조회", devices));
     }

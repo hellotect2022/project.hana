@@ -21,11 +21,31 @@ public record PointSchemaDefinition(
         String tagDesc,
         String tagDisplayName,
         boolean isDisplay,
-        String dataSource
+        String dataSource,
+        Integer sortOrder,
+        Boolean hud
 ) {
     @JsonCreator
     public PointSchemaDefinition {
         // 이 컴팩트 생성자 형식을 사용하면 Jackson이 필드 이름과 매칭하여 역직렬화합니다.
-        // dataSource 가 없는 기존 JSONB 데이터는 null 로 들어옵니다(= 기존 값 유지 / VIEW01 취급).
+        // dataSource / sortOrder / hud 가 없는 기존 JSONB 데이터는 null 로 들어옵니다.
+    }
+
+    /**
+     * 표시 순서. 화면에서 행을 끌어 옮긴 순서대로 0부터 부여된다.
+     *
+     * <p>{@code null}(이 필드 도입 전 데이터)이면 <b>배열에 담긴 순서</b>가 곧 의도한 순서이므로,
+     * 정렬할 때 원래 인덱스를 그대로 쓰면 된다 — 백필 없이 배포할 수 있다.</p>
+     */
+    public int sortOrderOr(int fallback) {
+        return sortOrder == null ? fallback : sortOrder;
+    }
+
+    /**
+     * HUD 표출 여부. {@code null}(미지정)은 <b>false</b> 로 본다 —
+     * 기존 카테고리가 전부 갑자기 HUD 에 뜨면 안 되기 때문이다.
+     */
+    public boolean hudEnabled() {
+        return Boolean.TRUE.equals(hud);
     }
 }

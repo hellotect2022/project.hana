@@ -10,6 +10,7 @@ import com.mpole.hana.digitaltwin.device.dto.DevicePointMappingPageResponse;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointRefMappingRequest;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointRegisterItem;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointResponse;
+import com.mpole.hana.digitaltwin.device.schema.PointSchemaIndex;
 import com.mpole.hana.digitaltwin.device.dto.DeviceResponse;
 import com.mpole.hana.digitaltwin.device.dto.DeviceUpdateRequest;
 import com.mpole.hana.digitaltwin.device.entity.Device;
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -222,13 +224,19 @@ public class DeviceService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DeviceResponse> getDevicesPage(String keyword, Long categoryId, Pageable pageable) {
+    /**
+     * @param hasCommandPoint true 면 활성 제어 포인트가 있는 장비만(디바이스 제어 화면).
+     *                        null/false 면 전체 — 기존 호출부 동작 그대로.
+     */
+    public Page<DeviceResponse> getDevicesPage(String keyword, Long categoryId,
+                                               Boolean hasCommandPoint, Pageable pageable) {
         String kw = normalizeKeyword(keyword);
         List<Long> categoryIds = deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(categoryId);
 //        if (categoryIds != null && categoryIds.isEmpty()) {
 //            return Page.empty(pageable);
 //        }
-        return mapWithCommandPoints(deviceRepository.searchDevices(kw, categoryIds, pageable));
+        return mapWithCommandPoints(
+                deviceRepository.searchDevices(kw, categoryIds, hasCommandPoint, pageable));
     }
 
     @Transactional(readOnly = true)
@@ -250,8 +258,17 @@ public class DeviceService {
                                 cp.getPoint() != null ? cp.getPoint().getPointId() : null,
                                 cp.getLabel(),
                                 cp.getPoint() != null ? cp.getPoint().getTagName() : null,
+                                // 유형과 유형별 설정을 모두 실어야 화면이 올바른 컨트롤을 그린다.
+                                cp.getCommandType(),
                                 cp.getOnValue(),
-                                cp.getOffValue()
+                                cp.getOffValue(),
+                                cp.getOnLabel(),
+                                cp.getOffLabel(),
+                                cp.getMinValue(),
+                                cp.getMaxValue(),
+                                cp.getStepValue(),
+                                cp.getUnit(),
+                                cp.getOptions()
                         ), Collectors.toList())));
     }
 
@@ -282,11 +299,21 @@ public class DeviceService {
 
     @Transactional(readOnly = true)
     public List<DevicePointResponse> getDevicePoints(Long deviceId) {
-        if (!deviceRepository.existsById(deviceId)) {
-            throw new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId);
-        }
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new RuntimeException("장비를 찾을 수 없습니다. id=" + deviceId));
+
+        // sortOrder·hud 는 포인트 행이 아니라 카테고리 스키마에 있다 — tagName 으로 붙인다.
+        PointSchemaIndex schema = PointSchemaIndex.of(device.getCategory());
+
         return devicePointRepository.findAllByDevice_DeviceIdOrderByTagNameAsc(deviceId).stream()
-                .map(DevicePointResponse::from)
+                .map(p -> DevicePointResponse.from(p, schema.find(p.getTagName())))
+                // 스키마 순서로 정렬한다. 스키마에 없는 태그(지워졌는데 포인트만 남은 것)는
+                // 뒤로 보내고 tagName 순으로 둔다.
+                .sorted(Comparator
+                        .comparing(DevicePointResponse::sortOrder,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(DevicePointResponse::tagName,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
     }
 
@@ -588,12 +615,12 @@ public class DeviceService {
         }
 
         // 상태값 갱신(제공된 경우만). alarm_state=false 면 hana-event 평가기가 알람 억제(캐시 반영 지연 존재).
-        if (request.alarmState() != null) {
-            device.setAlarmState(request.alarmState());
-        }
-        if (request.operationState() != null) {
-            device.setOperationState(request.operationState());
-        }
+//        if (request.alarmState() != null) {
+//            device.setAlarmState(request.alarmState());
+//        }
+//        if (request.operationState() != null) {
+//            device.setOperationState(request.operationState());
+//        }
 
         // 소속 인프라 지정(제공된 경우만). 해제(null 설정)는 PUT /api/device-infra/mapping 경유.
         if (request.infraId() != null) {

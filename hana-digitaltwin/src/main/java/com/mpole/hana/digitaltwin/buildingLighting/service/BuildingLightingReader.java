@@ -135,6 +135,7 @@ public class BuildingLightingReader {
                 floor != null ? floor.getFloorId() : null,
                 floor != null ? floor.getFloorName() : null,
                 floor != null ? floor.getFloorNum() : null,
+                floor != null ? floor.getSortOrder() : null,
                 zone != null ? zone.getZoneId() : null,
                 zone != null ? zone.getZoneName() : null,
                 state,

@@ -13,6 +13,12 @@ public record LightingReading(
         Long floorId,
         String floorName,
         Integer floorNum,
+        /**
+         * 층 표시 정렬 순서(0 = 최하층). 층별·구역별 정렬 기준.
+         * <p>{@code floorNum} 으로 정렬하면 층수가 없는 옥외({@code floor_num = 100})가
+         * PH2F 뒤로 밀린다.</p>
+         */
+        Integer floorSortOrder,
         Long zoneId,
         String zoneName,
         LightingState state,

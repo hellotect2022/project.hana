@@ -20,6 +20,8 @@ public record LightingZoneStatusResponse(
         Long floorId,
         String floorName,
         Integer floorNum,
+        /** 층 표시 정렬 순서(0 = 최하층). 목록은 이미 이 순서로 정렬돼 있다. */
+        Integer floorSortOrder,
         long deviceCount,
         long onCount,
         long offCount,
@@ -57,7 +59,7 @@ public record LightingZoneStatusResponse(
                 .orElse(null);
 
         return new LightingZoneStatusResponse(
-                any.zoneId(), any.zoneName(), any.floorId(), any.floorName(), any.floorNum(),
+                any.zoneId(), any.zoneName(), any.floorId(), any.floorName(), any.floorNum(), any.floorSortOrder(),
                 deviceCount, onCount, offCount, state, dimming, comm, updatedAt);
     }
 }

@@ -47,12 +47,16 @@ public class DeviceByCategoryController {
     //region swagger 🔄 개별 카테고리 정보 조회 명세서
     @Operation(
             summary = "개별 카테고리 정보 조회",
-            description = "특정 카테고리 ID(categoryId)를 기준으로 하위 트리 정보를 조회합니다."
+            description = "특정 카테고리 ID(categoryId)를 기준으로 하위 트리 정보를 조회합니다.",
+            parameters ={
+                @Parameter(name = "categoryId", description = "장비 카테고리 ID", example = "1", required = true),
+            }
     )
     //endregion
     @GetMapping("/device-categories/{categoryId}")
-    public ResponseEntity<ApiResponse<List<DeviceCategoryResponse>>> getCategoryInfosById() {
-        List<DeviceCategoryResponse> response = deviceCategoryService.getCategoryInfoTree();
+    public ResponseEntity<ApiResponse<List<DeviceCategoryResponse>>> getCategoryInfosById(
+            @PathVariable Long categoryId) {
+        List<DeviceCategoryResponse> response = deviceCategoryService.getCategoryInfoTree(categoryId);
         return ResponseEntity.ok(ApiResponse.success("개별 카테고리 정보 조회", response));
     }
 

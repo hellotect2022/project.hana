@@ -226,6 +226,8 @@ public class DevicePointSchemaSyncService {
             if (item == null || item.tagName() == null || item.tagName().isBlank()) {
                 continue;
             }
+            // sortOrder 가 비어 있으면 배열에 담긴 순서를 그대로 쓴다
+            // (이 필드 도입 전 데이터 — 지금 순서가 곧 의도한 순서다).
             result.add(new PointSchemaDefinition(
                     item.tagName().trim(),
                     item.type(),
@@ -233,7 +235,9 @@ public class DevicePointSchemaSyncService {
                     item.tagDesc(),
                     item.tagDisplayName(),
                     item.isDisplay(),
-                    item.dataSource()
+                    item.dataSource(),
+                    item.sortOrderOr(result.size()),
+                    item.hud()
             ));
         }
         return result;

@@ -122,7 +122,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> noResourceFoundException(NoResourceFoundException e) {
-        log.error("요청하신 API 경로를 찾을 수 없습니다. {}", e.getMessage());
+        //log.error("요청하신 API 경로를 찾을 수 없습니다. {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("요청하신 API 경로를 찾을 수 없습니다. "+e.getMessage(), "NOT_FOUND"));

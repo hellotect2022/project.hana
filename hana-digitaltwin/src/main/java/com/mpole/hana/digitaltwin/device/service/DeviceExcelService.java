@@ -44,7 +44,8 @@ public class DeviceExcelService {
         if (categoryIds != null && categoryIds.isEmpty()) {
             devices = List.of();
         } else {
-            devices = deviceRepository.searchDevices(kw, categoryIds, Pageable.unpaged()).getContent();
+            // 엑셀은 제어 유무와 무관하게 전체를 내보낸다(hasCommandPoint=null).
+            devices = deviceRepository.searchDevices(kw, categoryIds, null, Pageable.unpaged()).getContent();
         }
 
         try (XSSFWorkbook workbook = new XSSFWorkbook();

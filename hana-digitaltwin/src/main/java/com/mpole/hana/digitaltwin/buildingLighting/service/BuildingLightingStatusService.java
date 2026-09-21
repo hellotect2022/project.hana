@@ -20,8 +20,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class BuildingLightingStatusService {
 
+    /**
+     * 층(최하층부터) → 구역 순.
+     *
+     * <p>{@code floorNum} 이 아니라 {@code floorSortOrder} 로 정렬한다 — 옥외는 층수가 없어
+     * {@code floor_num = 100} 이라, 층 번호로 정렬하면 PH2F 뒤로 밀린다.</p>
+     */
     private static final Comparator<LightingReading> BY_FLOOR_THEN_ZONE = Comparator
-            .comparing(LightingReading::floorNum, Comparator.nullsLast(Comparator.naturalOrder()))
+            .comparing(LightingReading::floorSortOrder, Comparator.nullsLast(Comparator.naturalOrder()))
             .thenComparing(LightingReading::zoneId, Comparator.nullsLast(Comparator.naturalOrder()));
 
     private final BuildingLightingReader reader;

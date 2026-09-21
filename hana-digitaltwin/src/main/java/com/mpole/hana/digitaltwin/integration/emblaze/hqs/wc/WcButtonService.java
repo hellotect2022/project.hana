@@ -103,38 +103,42 @@ public class WcButtonService {
 
     private void postToHqs(AmqpPointTarget target, WcButtonType type,
                            String switchNumber, OffsetDateTime pressedAt) {
-        String buildingId = hqsProperties.getBuildingId();
-        if (!StringUtils.hasText(buildingId)) {
-            log.warn("hdt.integration.hqs.building-id 미설정 — bldgId 를 빈 값으로 전송");
-        }
+        try {
+            String buildingId = hqsProperties.getBuildingId();
+            if (!StringUtils.hasText(buildingId)) {
+                log.warn("hdt.integration.hqs.building-id 미설정 — bldgId 를 빈 값으로 전송");
+            }
 
-        // 식별자는 boothStatus 응답과 같은 기준을 쓴다 — zone_code (장비를 다시 만들어도 안 바뀐다).
-        HqsWcButtonRequest body = HqsWcButtonRequest.builder()
-                .bldgId(buildingId == null ? "" : buildingId)
-                .florId(target.floorName())
-                .wcId(target.parentZoneCode())
-                .gender(genderOf(target.parentZoneCode()))
-                .wcBoothId(target.zoneCode())
-                .buttonType(switchNumber)
-                .timestamp(pressedAt.toString())
-                .build();
+            // 식별자는 boothStatus 응답과 같은 기준을 쓴다 — zone_code (장비를 다시 만들어도 안 바뀐다).
+            HqsWcButtonRequest body = HqsWcButtonRequest.builder()
+                    .bldgId(buildingId == null ? "" : buildingId)
+                    .florId(target.floorName())
+                    .wcId(target.parentZoneCode())
+                    .gender(genderOf(target.parentZoneCode()))
+                    .wcBoothId(target.zoneCode())
+                    .buttonType(switchNumber)
+                    .timestamp(pressedAt.toString())
+                    .build();
 
-        if (!StringUtils.hasText(body.wcId()) || !StringUtils.hasText(body.wcBoothId())
-                || !StringUtils.hasText(body.florId())) {
-            // 필수값이 비었으면 HQS 가 110(파라미터 오류)을 줄 뿐이다 — 보내기 전에 원인을 남긴다.
-            log.error("wcButton 필수값 누락 — 부스 장비의 구역 배치를 확인할 것 deviceId={} florId={} wcId={} wcBoothId={}",
-                    target.deviceId(), body.florId(), body.wcId(), body.wcBoothId());
-            return;
-        }
+            if (!StringUtils.hasText(body.wcId()) || !StringUtils.hasText(body.wcBoothId())
+                    || !StringUtils.hasText(body.florId())) {
+                // 필수값이 비었으면 HQS 가 110(파라미터 오류)을 줄 뿐이다 — 보내기 전에 원인을 남긴다.
+                log.error("HQS wcButton 필수값 누락 — 부스 장비의 구역 배치를 확인할 것 deviceId={} florId={} wcId={} wcBoothId={}",
+                        target.deviceId(), body.florId(), body.wcId(), body.wcBoothId());
+                return;
+            }
 
-        HqsOutboundResponse response = hqsClient.postWcButton(body);
-        if (response == null || !response.isSuccess()) {
-            // 버튼 누름은 재전송 큐가 없다 — 전송이 실패해도 누적 카운트는 계속 올린다.
-            log.error("HQS wcButton 전송 실패 booth={} type={}", target.zoneCode(), type);
-            return;
+            HqsOutboundResponse response = hqsClient.postWcButton(body);
+            if (response == null || !response.isSuccess()) {
+                // 버튼 누름은 재전송 큐가 없다 — 전송이 실패해도 누적 카운트는 계속 올린다.
+                log.error("HQS wcButton 전송 실패 booth={} type={}", target.zoneCode(), type);
+                return;
+            }
+            log.info("HQS wcButton 전송 완료 booth={} type={} result={}",
+                    target.zoneCode(), type, response.result());
+        }catch (Exception e) {
+            log.error("HQS wcButton API 호출하다 에러 : {}",e.getMessage());
         }
-        log.info("HQS wcButton 전송 완료 booth={} type={} result={}",
-                target.zoneCode(), type, response.result());
     }
 
     /**
