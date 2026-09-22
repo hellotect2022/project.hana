@@ -13,8 +13,8 @@ import java.util.List;
  */
 @Builder
 public record HqsRollscreenListData(
-        String floorId,
-        String floorName,
+        String florId,
+        String florName,
         List<HqsRollscreenGroupItem> groupList
 ) {
 }

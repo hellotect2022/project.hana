@@ -3,10 +3,12 @@ package com.mpole.hana.digitaltwin.integration.emblaze.hqs.wc;
 import com.mpole.hana.common.dto.XnPointData;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.AmqpPointMappingCache;
+import com.mpole.hana.digitaltwin.integration.emblaze.amqp.EmblazeTrace;
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.AmqpPointTarget;
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.MonitoringQueue;
 import com.mpole.hana.digitaltwin.integration.emblaze.config.HqsProperties;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.HqsClient;
+import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsCallResult;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsOutboundResponse;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.wc.dto.HqsWcButtonRequest;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
@@ -79,22 +81,25 @@ public class WcButtonService {
      * @param switchNumber 눌린 스위치 번호(0·1=점검요청, 2·3=청소요청)
      * @param pressedAt    센서 타임스탬프
      */
-    public void handleButtonPress(String deviceUuid, String switchNumber, OffsetDateTime pressedAt) {
+    public void handleButtonPress(String deviceUuid, String switchNumber, OffsetDateTime pressedAt,
+                                  EmblazeTrace trace) {
         WcButtonType type = WcButtonType.fromSwitchNumber(switchNumber);
         if (type == null) {
-            log.warn("[{}] 정의되지 않은 switch_number='{}' device={}", MonitoringQueue.Names.ENOCEAN, switchNumber, deviceUuid);
+            trace.fail("type", "정의되지 않은 switch_number");
             return;
         }
+        trace.ok("type", type);
 
         AmqpPointTarget target = amqpPointMappingCache.resolve(deviceUuid, FIELD_SWITCH);
         if (target == null) {
-            log.warn("[{}] 매핑 없는 물리버튼 uuid={} (tbl_device_point.ref_device_code 등록 필요)",MonitoringQueue.Names.ENOCEAN, deviceUuid);
+            trace.fail("map", "미등록 uuid — tbl_device_point.ref_device_code 없음");
             return;
         }
+        trace.ok("map", target.zoneCode() + "/" + target.floorName());
 
         OffsetDateTime at = pressedAt == null ? OffsetDateTime.now() : pressedAt;
-        postToHqs(target, type, switchNumber, at);
-        increaseCount(type, at);
+        postToHqs(target, type, switchNumber, at, trace);
+        increaseCount(type, at, trace);
     }
 
     /* ════════════════════════════════════════════════════════════════
@@ -102,12 +107,9 @@ public class WcButtonService {
      * ════════════════════════════════════════════════════════════════ */
 
     private void postToHqs(AmqpPointTarget target, WcButtonType type,
-                           String switchNumber, OffsetDateTime pressedAt) {
+                           String switchNumber, OffsetDateTime pressedAt, EmblazeTrace trace) {
         try {
             String buildingId = hqsProperties.getBuildingId();
-            if (!StringUtils.hasText(buildingId)) {
-                log.warn("hdt.integration.hqs.building-id 미설정 — bldgId 를 빈 값으로 전송");
-            }
 
             // 식별자는 boothStatus 응답과 같은 기준을 쓴다 — zone_code (장비를 다시 만들어도 안 바뀐다).
             HqsWcButtonRequest body = HqsWcButtonRequest.builder()
@@ -122,22 +124,25 @@ public class WcButtonService {
 
             if (!StringUtils.hasText(body.wcId()) || !StringUtils.hasText(body.wcBoothId())
                     || !StringUtils.hasText(body.florId())) {
-                // 필수값이 비었으면 HQS 가 110(파라미터 오류)을 줄 뿐이다 — 보내기 전에 원인을 남긴다.
-                log.error("HQS wcButton 필수값 누락 — 부스 장비의 구역 배치를 확인할 것 deviceId={} florId={} wcId={} wcBoothId={}",
-                        target.deviceId(), body.florId(), body.wcId(), body.wcBoothId());
+                // 필수값이 비었으면 HQS 가 IF110(파라미터 오류)을 줄 뿐이다 — 보내기 전에 원인을 남긴다.
+                trace.fail("hqs", "필수값 누락(부스 구역 배치 확인) florId=" + body.florId()
+                        + " wcId=" + body.wcId() + " wcBoothId=" + body.wcBoothId());
                 return;
+            }
+            if (!StringUtils.hasText(buildingId)) {
+                trace.ok("bldgId", "미설정(hdt.integration.hqs.building-id)");
             }
 
-            HqsOutboundResponse response = hqsClient.postWcButton(body);
-            if (response == null || !response.isSuccess()) {
-                // 버튼 누름은 재전송 큐가 없다 — 전송이 실패해도 누적 카운트는 계속 올린다.
-                log.error("HQS wcButton 전송 실패 booth={} type={}", target.zoneCode(), type);
-                return;
+            HqsCallResult result = hqsClient.postWcButton(body);
+            // 버튼 누름은 재전송 큐가 없다 — 전송이 실패해도 누적 카운트는 계속 올린다.
+            if (result.isSuccess()) {
+                trace.ok("hqs", result.describe() + " trx=" + result.trxId());
+            } else {
+                trace.fail("hqs", result.describe() + " trx=" + result.trxId());
             }
-            log.info("HQS wcButton 전송 완료 booth={} type={} result={}",
-                    target.zoneCode(), type, response.result());
-        }catch (Exception e) {
-            log.error("HQS wcButton API 호출하다 에러 : {}",e.getMessage());
+        } catch (Exception e) {
+            trace.fail("hqs", e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : ": " + e.getMessage()));
         }
     }
 
@@ -161,16 +166,16 @@ public class WcButtonService {
      * ════════════════════════════════════════════════════════════════ */
 
     /** 해당 버튼 종류의 누적 카운트를 1 올린다. */
-    private void increaseCount(WcButtonType type, OffsetDateTime pressedAt) {
+    private void increaseCount(WcButtonType type, OffsetDateTime pressedAt, EmblazeTrace trace) {
         String statsDeviceKey = hqsProperties.getStatsDeviceKey();
         if (!StringUtils.hasText(statsDeviceKey)) {
-            log.warn("hdt.integration.hqs.stats-device-key 미설정 — 누적 카운트 생략");
+            trace.skip("cnt", "hdt.integration.hqs.stats-device-key 미설정");
             return;
         }
 
         Optional<Device> found = deviceWcBoothRepository.findFirstByDeviceKey(statsDeviceKey);
         if (found.isEmpty()) {
-            log.warn("통계 장비 없음 device_key={} — 누적 카운트 생략", statsDeviceKey);
+            trace.skip("cnt", "통계 장비 없음 device_key=" + statsDeviceKey);
             return;
         }
         Device statsDevice = found.get();
@@ -181,7 +186,7 @@ public class WcButtonService {
             boothCurrentValueWriter.writePoint(
                     statsDevice.getDeviceId(), statsDevice.getDeviceKey(),
                     tagName, String.valueOf(next), pressedAt);
-            log.info("{} 누적 {} (deviceId={})", type.getLabel(), next, statsDevice.getDeviceId());
+            trace.ok("cnt", next + "(" + type.getLabel() + ")");
         }
     }
 

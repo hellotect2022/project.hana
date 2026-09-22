@@ -1,6 +1,8 @@
 package com.mpole.hana.digitaltwin.integration.emblaze.hqs.rollscreen;
 
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsApiResponse;
+import com.mpole.hana.digitaltwin.integration.emblaze.hqs.rollscreen.dto.HqsRollscreenControlData;
+import com.mpole.hana.digitaltwin.integration.emblaze.hqs.rollscreen.dto.HqsRollscreenControlRequest;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.rollscreen.dto.HqsRollscreenListData;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.rollscreen.dto.HqsRollscreenListRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -60,6 +62,36 @@ public class HqsRollscreenController {
             @RequestHeader(value = "X-trxId", required = false) String trxId,
             @Valid @RequestBody HqsRollscreenListRequest request) {
         HqsRollscreenListData data = hqsRollscreenService.getRollscreenList(request);
+        return ResponseEntity.ok(HqsApiResponse.success(data));
+    }
+
+    //region swagger 🔄 전동롤스크린 제어 명세서
+    @Operation(
+            summary = "전동롤스크린 개방률 제어",
+            description = """
+                    롤스크린을 지정한 개방률로 움직입니다.
+
+                    **대상** — 조회와 장비가 다릅니다.
+                    · 상태는 모터(`MRS`), **제어는 구역 제어기(`MRS-CONTROL`)** 가 받습니다.
+                    · `groupId` = 제어기의 `device_name` (예: `MT.F010.Z000`)
+                    · `florId` 도 함께 검증합니다 — 배치된 층과 다르면 거절합니다.
+
+                    **openPercent** — 100 = 완전열림 / 0 = 닫힘, **20 단위**
+                    (20·40·60·80·100). 그 외 값은 제어 포인트 설정(RANGE 0~100 step 20)에서 거부됩니다.
+
+                    내부적으로 `pos = 100 - openPercent` 로 **뒤집어** 전송합니다 —
+                    장비의 `pos` 는 최상단이 0(개방), 최하단이 100(차광)입니다.
+
+                    **응답** — 성공하면 `result: "success"`. 실패하면 오류 코드와 함께
+                    **사유가 `message` 에 담깁니다**(허용 범위·단위 위반, 매핑 누락 등).
+                    """
+    )
+    //endregion
+    @PostMapping("/control")
+    public ResponseEntity<HqsApiResponse<HqsRollscreenControlData>> control(
+            @RequestHeader(value = "X-trxId", required = false) String trxId,
+            @Valid @RequestBody HqsRollscreenControlRequest request) {
+        HqsRollscreenControlData data = hqsRollscreenService.control(request);
         return ResponseEntity.ok(HqsApiResponse.success(data));
     }
 }

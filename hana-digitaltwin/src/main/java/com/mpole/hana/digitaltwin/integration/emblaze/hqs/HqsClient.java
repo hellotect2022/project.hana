@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.integration.emblaze.hqs;
 
 import com.mpole.hana.digitaltwin.integration.emblaze.config.HqsProperties;
 import com.mpole.hana.digitaltwin.integration.emblaze.config.RestClientFactory;
+import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsCallResult;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.dto.HqsOutboundResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -54,24 +55,29 @@ public class HqsClient {
      * @return HQS 응답. 호출 자체가 실패하면 null — 버튼 누름은 재전송 큐가 없으므로
      *         호출부는 로그만 남기고 누적 카운트는 계속 진행한다.
      */
-    public HqsOutboundResponse postWcButton(Object body) {
+    public HqsCallResult postWcButton(Object body) {
         String url = props.getBaseUrl() + props.getPaths().getWcButton();
         String trxId = newTrxId();
 
-        HqsOutboundResponse response = exchange(url, body, trxId, false);
+        HqsCallResult result = exchange(url, body, trxId, false);
+        HqsOutboundResponse response = result.response();
         if (response != null && response.isAuthFailure() && tokenProvider.refresh()) {
-            log.info("HQS 토큰 재발급 후 재시도 trxId={}", trxId);
-            response = exchange(url, body, newTrxId(), true);
+            String retryTrxId = newTrxId();
+            log.info("HQS 토큰 재발급 후 재시도 trxId={} → {}", trxId, retryTrxId);
+            result = exchange(url, body, retryTrxId, true);
         }
-        return response;
+        return result;
     }
 
     /**
      * 실제 전송 1회.
      *
+     * <p>실패를 {@code null} 로 뭉개지 않고 {@link HqsCallResult} 에 <b>사유와 trxId 를 담아</b> 돌려준다 —
+     * 호출부가 요약 로그 한 줄에 "왜 실패했는지"를 적을 수 있어야 한다.</p>
+     *
      * @param isRetry 재시도 호출인지 — 로그 구분용
      */
-    private HqsOutboundResponse exchange(String url, Object body, String trxId, boolean isRetry) {
+    private HqsCallResult exchange(String url, Object body, String trxId, boolean isRetry) {
         // 토큰이 없으면 여기서 로그인이 일어난다(HqsTokenProvider.currentToken).
         String token = tokenProvider.currentToken();
         if (!StringUtils.hasText(token)) {
@@ -94,22 +100,25 @@ public class HqsClient {
 
             if (response == null) {
                 log.error("HQS 응답 본문 없음 url={} trxId={}", url, trxId);
-            } else if (!response.isSuccess()) {
+                return HqsCallResult.transportFail(trxId, "응답본문없음");
+            }
+            if (!response.isSuccess()) {
                 log.error("HQS 응답 실패 url={} trxId={} code={} message={}",
                         url, trxId, response.code(), response.message());
             } else {
-                log.info("HQS 전송 성공{} trxId={} result={}", isRetry ? "(재시도)" : "", trxId, response.result());
+                log.debug("HQS 전송 성공{} trxId={} result={}", isRetry ? "(재시도)" : "", trxId, response.result());
             }
-            return response;
+            return HqsCallResult.of(response, trxId);
 
         } catch (RestClientResponseException e) {
             // 4xx/5xx — 본문에 code/message 가 실려 올 수 있어 그대로 남긴다
             log.error("HQS 호출 실패 url={} trxId={} status={} body={}",
                     url, trxId, e.getStatusCode(), e.getResponseBodyAsString());
-            return null;
+            return HqsCallResult.transportFail(trxId, "HTTP " + e.getStatusCode().value());
         } catch (Exception e) {
             log.error("HQS 호출 오류 url={} trxId={}: {}", url, trxId, e.getMessage());
-            return null;
+            return HqsCallResult.transportFail(trxId,
+                    e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()));
         }
     }
 

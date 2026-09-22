@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.integration.emblaze.hqs.wc;
 
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.AmqpPointMappingCache;
+import com.mpole.hana.digitaltwin.integration.emblaze.amqp.EmblazeTrace;
 import com.mpole.hana.digitaltwin.integration.emblaze.amqp.AmqpPointTarget;
 import com.mpole.hana.digitaltwin.integration.emblaze.config.HqsProperties;
 import com.mpole.hana.digitaltwin.integration.emblaze.hqs.wc.dto.HqsBoothStatusData;
@@ -103,16 +104,25 @@ public class HqsApiService {
      * @param deviceUuid   emblaze 조명제어기 uuid
      * @param accumulation PIR 누적값
      */
-    public void saveBoothStatusData(String deviceUuid, long accumulation) {
+    public void saveBoothStatusData(String deviceUuid, long accumulation, EmblazeTrace trace) {
         if (!StringUtils.hasText(deviceUuid)) {
-            log.warn("saveBoothStatusData: deviceUuid 비어 있음");
+            trace.fail("occ", "deviceUuid 비어 있음");
+            trace.flush(log);
             return;
         }
 
         try {
-            boothSaveExecutor.execute(() -> applyPir(deviceUuid, accumulation));
+            // 재실 판정이 끝난 뒤 trace 를 내보낸다 — 판정 결과까지 한 줄에 담기 위함이다.
+            boothSaveExecutor.execute(() -> {
+                try {
+                    applyPir(deviceUuid, accumulation, trace);
+                } finally {
+                    trace.flush(log);
+                }
+            });
         } catch (RejectedExecutionException e) {
-            log.warn("saveBoothStatusData: executor 종료됨 device={}", deviceUuid);
+            trace.fail("occ", "executor 종료됨");
+            trace.flush(log);
         }
     }
 
@@ -129,22 +139,23 @@ public class HqsApiService {
      *
      * <p>단일 스레드 executor 위에서만 호출된다.</p>
      */
-    private void applyPir(String deviceUuid, long accumulation) {
+    private void applyPir(String deviceUuid, long accumulation, EmblazeTrace trace) {
         AmqpPointTarget target = amqpPointMappingCache.resolve(deviceUuid, FIELD_PIR);
         if (target == null) {
-            log.warn("매핑 없는 재실센서 uuid={} (tbl_device_point.ref_device_code 등록 필요)", deviceUuid);
+            trace.fail("occ", "미등록 uuid — tbl_device_point.ref_device_code 없음");
             return;
         }
 
         Long last = lastPirByDevice.put(deviceUuid, accumulation);
         if (last == null) {
             // 첫 샘플은 기준값만 잡는다(증감을 알 수 없음)
-            log.debug("PIR 첫 샘플 device={} deviceId={} pir={}", deviceUuid, target.deviceId(), accumulation);
+            trace.ok("occ", "기준값설정(" + target.zoneCode() + ")");
             return;
         }
         if (accumulation <= last) {
             // 움직임 없음(동일) 또는 센서 리셋(감소) — 기록하지 않는다.
             // 마지막 움직임 시각이 그대로 남아 시간이 지나면 조회에서 0 으로 읽힌다.
+            trace.ok("occ", "변화없음(" + last + "→" + accumulation + ")");
             return;
         }
 
@@ -152,6 +163,7 @@ public class HqsApiService {
         boothCurrentValueWriter.writeOccupancy(
                 target.deviceId(), target.deviceKey(),
                 BoothCurrentValueWriter.OCC_OCCUPIED, OffsetDateTime.now());
+        trace.ok("occ", "재실기록(" + target.zoneCode() + " " + last + "→" + accumulation + ")");
     }
 
     // ────────────────────────────────────────────────────────────────

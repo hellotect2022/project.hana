@@ -45,7 +45,7 @@ public class EmblazeStatusRouter {
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> field = fields.next();
             AmqpPointTarget target = amqpPointMappingCache.resolve(deviceUuid, field.getKey());
-            log.info("target 을 찾았음 : {}",target);
+            //log.info("target 을 찾았음 : {}",target);
             if (target == null) {
                 continue; // 등록하지 않은 필드 — 무시
             }

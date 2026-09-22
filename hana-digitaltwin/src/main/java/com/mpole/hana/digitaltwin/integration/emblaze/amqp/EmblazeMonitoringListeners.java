@@ -28,8 +28,13 @@ import java.time.OffsetDateTime;
  *   enocean switch_number / index                         → 버튼(TB) 장비
  * </pre>
  *
- * <p>큐별 리스너에는 <b>원본 저장 이후의 부가 처리만</b> 남긴다 — 재실 판정(space),
- * 중복 제거·HQS 전송(enocean). 조명은 부가 처리가 없어 저장만 한다.</p>
+ * <h3>로그</h3>
+ * <p>메시지 1건이 여러 클래스를 거치므로 {@link EmblazeTrace} 에 단계별 결과를 모아
+ * <b>한 줄로</b> 내보낸다. 중간에 어디서 끝나든 {@code finally} 에서 반드시 찍히므로
+ * "실패한 건지 아예 안 탄 건지"가 한 줄에 드러난다.</p>
+ *
+ * <p>{@code space} 만 예외다 — 재실 판정이 단일 스레드 executor 로 넘어가므로
+ * trace 도 함께 넘겨 <b>그쪽에서 flush 한다</b>. 여기서 찍으면 판정 결과가 빠진다.</p>
  *
  * <p>{@code hdt.integration.emblaze.enabled=true} 일 때만 기동(기본 OFF).</p>
  */
@@ -48,83 +53,141 @@ public class EmblazeMonitoringListeners {
     /** 조명 메시지 → 밝기 기록 (부가 처리 없음) */
     @RabbitListener(queues = MonitoringQueue.Names.LIGHT, containerFactory = "monitoringContainerFactory")
     public void onLight(String body) {
+        log.info("[{}] : {}", MonitoringQueue.Names.LIGHT, body);
+        EmblazeTrace trace = null;
         try {
-            log.info("onLight : {}",body);
             JsonNode node = objectMapper.readTree(body);
             String deviceUuid = node.path("device_uuid").asText(null);
-            OffsetDateTime eventAt = EmblazeStatusRouter.parseTimestamp(node.path("timestamp").asText(null));
+            trace = EmblazeTrace.start(MonitoringQueue.Names.LIGHT, deviceUuid);
 
-            emblazeStatusRouter.route(deviceUuid, node.get("status"), eventAt);
+            OffsetDateTime eventAt = EmblazeStatusRouter.parseTimestamp(node.path("timestamp").asText(null));
+            int written = emblazeStatusRouter.route(deviceUuid, node.get("status"), eventAt);
+            recordRoute(trace, written);
+
         } catch (JsonProcessingException e) {
-            log.error("onLight 파싱 오류", e);
+            trace = failedTrace(trace, MonitoringQueue.Names.LIGHT, "본문 파싱 오류: " + e.getOriginalMessage());
         } catch (Exception e) {
-            log.error("onLight 처리 중 오류: {}", e.getMessage(), e);
+            trace = failedTrace(trace, MonitoringQueue.Names.LIGHT, describe(e));
+        } finally {
+            if (trace != null) {
+                trace.flush(log);
+            }
         }
     }
 
     /** 공간(PIR 누적값) 메시지 → 원본 기록 + 재실 판정 */
     @RabbitListener(queues = MonitoringQueue.Names.SPACE, containerFactory = "monitoringContainerFactory")
     public void onSpace(String body) {
+        log.info("[{}] : {}", MonitoringQueue.Names.SPACE, body);
+        EmblazeTrace trace = null;
+        boolean handedOff = false; // 재실 판정 쪽으로 trace 를 넘겼는가
         try {
-            log.info("onSpace : {}",body);
             JsonNode node = objectMapper.readTree(body);
             String deviceUuid = node.path("device_uuid").asText(null);
             JsonNode status = node.get("status");
+            trace = EmblazeTrace.start(MonitoringQueue.Names.SPACE, deviceUuid);
+
             OffsetDateTime eventAt = EmblazeStatusRouter.parseTimestamp(node.path("timestamp").asText(null));
 
             // ① 원본(pir_accumulation) 그대로 기록
-            emblazeStatusRouter.route(deviceUuid, status, eventAt);
+            recordRoute(trace, emblazeStatusRouter.route(deviceUuid, status, eventAt));
 
-            // ② 누적값 증감으로 재실(occ) 판정 — 상태가 바뀔 때만 기록한다
+            // ② 누적값 증감으로 재실(occ) 판정 — 움직임이 있을 때만 기록한다
             if (status == null || !status.hasNonNull("pir_accumulation")) {
-                log.warn("space 메시지에 pir_accumulation 없음 device={}", deviceUuid);
+                trace.fail("occ", "pir_accumulation 없음");
                 return;
             }
+            long pir = status.path("pir_accumulation").asLong();
+            trace.key("pir", pir);
 
-            // occ 로 변환해서 처리함
-            hqsApiService.saveBoothStatusData(deviceUuid, status.path("pir_accumulation").asLong());
+            // 판정은 executor 에서 끝나므로 trace 도 넘긴다 — 결과까지 한 줄에 담기 위함이다.
+            handedOff = true;
+            hqsApiService.saveBoothStatusData(deviceUuid, pir, trace);
+
         } catch (JsonProcessingException e) {
-            log.error("onSpace 파싱 오류", e);
+            trace = failedTrace(trace, MonitoringQueue.Names.SPACE, "본문 파싱 오류: " + e.getOriginalMessage());
         } catch (Exception e) {
-            log.error("onSpace 처리 중 오류: {}", e.getMessage(), e);
+            handedOff = false;
+            trace = failedTrace(trace, MonitoringQueue.Names.SPACE, describe(e));
+        } finally {
+            // 넘겼으면 저쪽이 찍는다. flush 는 두 번 불려도 한 번만 나가지만, 여기서 먼저 찍으면
+            // 판정 결과가 빠진 줄이 나가므로 넘긴 경우엔 건드리지 않는다.
+            if (trace != null && !handedOff) {
+                trace.flush(log);
+            }
         }
     }
 
     /** EnOcean 무선버튼 메시지 → 원본 기록 + HQS wcButton 전송 */
     @RabbitListener(queues = MonitoringQueue.Names.ENOCEAN, containerFactory = "monitoringContainerFactory")
     public void onEnocean(String body) {
+        log.info("[{}] : {}", MonitoringQueue.Names.ENOCEAN, body);
+        EmblazeTrace trace = null;
         try {
-            log.info("[{}] : {}",MonitoringQueue.Names.ENOCEAN,body);
             JsonNode node = objectMapper.readTree(body);
             String deviceUuid = node.path("device_uuid").asText(null);
             JsonNode status = node.get("status");
+            trace = EmblazeTrace.start(MonitoringQueue.Names.ENOCEAN, deviceUuid);
+
             if (status == null) {
-                log.warn("enocean 메시지에 status 없음 device={}", deviceUuid);
+                trace.fail("recv", "status 없음");
                 return;
             }
             OffsetDateTime eventAt = EmblazeStatusRouter.parseTimestamp(node.path("timestamp").asText(null));
 
             // 같은 index 는 같은 이벤트다(벤더 명세) — 저장·전송 전에 걸러낸다
             long index = status.path("index").asLong();
+            String switchNumber = status.path("switch_number").asText();
+            trace.key("idx", index).key("sw", switchNumber.isEmpty() ? "?" : switchNumber);
+
             if (enOceanIndexDeduplicator.isDuplicate(deviceUuid, index)) {
-                log.debug("EnOcean 중복 무시 device={} index={}", deviceUuid, index);
+                trace.ok("dedup", "DUP");
                 return;
             }
+            trace.ok("dedup", "PASS");
 
             // ① 원본(switch_number, index) 기록
-            emblazeStatusRouter.route(deviceUuid, status, eventAt);
+            recordRoute(trace, emblazeStatusRouter.route(deviceUuid, status, eventAt));
 
             // ② HQS 전송 + 요청 종류별 누적 집계
-            String switchNumber = status.path("switch_number").asText();
-            if (!switchNumber.isEmpty()) {
-                log.info("[{}] Switch 눌림 device={} switch_number={}",MonitoringQueue.Names.ENOCEAN, deviceUuid, switchNumber);
-                wcButtonService.handleButtonPress(deviceUuid, switchNumber, eventAt);
+            if (switchNumber.isEmpty()) {
+                trace.fail("type", "switch_number 없음");
+                return;
             }
+            wcButtonService.handleButtonPress(deviceUuid, switchNumber, eventAt, trace);
+
         } catch (JsonProcessingException e) {
-            log.error("onEnocean 파싱 오류", e);
+            trace = failedTrace(trace, MonitoringQueue.Names.ENOCEAN, "본문 파싱 오류: " + e.getOriginalMessage());
         } catch (Exception e) {
-            log.error("onEnocean 처리 중 오류: {}", e.getMessage(), e);
+            trace = failedTrace(trace, MonitoringQueue.Names.ENOCEAN, describe(e));
+        } finally {
+            if (trace != null) {
+                trace.flush(log);
+            }
         }
+    }
+
+    /**
+     * 기록된 포인트 수를 남긴다. <b>0 이면 매핑이 안 된 것</b>이라 실패로 본다 —
+     * 메시지는 왔는데 어디에도 안 남은 상태가 조용히 지나가면 안 된다.
+     */
+    private static void recordRoute(EmblazeTrace trace, int written) {
+        if (written > 0) {
+            trace.ok("point", written);
+        } else {
+            trace.fail("point", "매핑된 필드 없음");
+        }
+    }
+
+    /** 본문 파싱 전에 터져 trace 가 없을 수도 있다 — 그때도 한 줄은 남긴다. */
+    private static EmblazeTrace failedTrace(EmblazeTrace trace, String queue, String reason) {
+        EmblazeTrace t = trace != null ? trace : EmblazeTrace.start(queue, null);
+        t.fail("recv", reason);
+        return t;
+    }
+
+    private static String describe(Exception e) {
+        return e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
     }
 
     // ────────────────────────────────────────────────────────────────
