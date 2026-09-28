@@ -17,8 +17,10 @@ import java.util.List;
 /**
  * HQS 전기차 충전기 조회 API (HQS 명세 URI 준수).
  *
- * <p>충전소는 별도 테이블이 아니라 <b>구역(zone)</b> 이다 — 충전기가 배치된 구역이 곧 충전소이고,
- * 그 구역의 {@code zone_code} 가 {@code stationId} 다.</p>
+ * <p>충전소는 <b>장비 그룹</b>이다 — {@code tbl_device_group(group_type='EV_STATION')} 의
+ * {@code group_code} 가 {@code stationId} 다. 예전에는 충전기가 배치된 구역(zone)이 곧
+ * 충전소였는데, {@code stationId} 값은 그대로이고 {@code stationName} 만 바뀌었다
+ * (구역명 {@code 주차장} → 그룹명 {@code 전기차충전소_지하2층}).</p>
  */
 @RestController
 @RequestMapping("/api/v1/hqs/charger")
@@ -32,10 +34,10 @@ public class ChargerApiController {
     @Operation(
             summary = "충전소별 충전기 목록 조회",
             description = """
-                    충전소(구역) 하위의 충전기와 상태를 반환합니다.
+                    충전소에 속한 충전기와 상태를 반환합니다.
 
                     **매핑**
-                    · `stationId` = 구역의 `zone_code` (구역명은 층마다 중복되어 키로 쓸 수 없음)
+                    · `stationId` = 충전소 그룹의 `group_code` (이름은 중복될 수 있어 키로 쓸 수 없음)
                     · `chargerId` = 장비의 `device_key` · `chargerName` = `device_name`
                     · `type` = 카테고리 `DCC`→`DC_FAST`(급속), `ACC`→`AC_SLOW`(완속)
 
@@ -51,7 +53,7 @@ public class ChargerApiController {
                     필드만 채우면 되고, 지금은 **충전기 1대당 항목이 정확히 1개**입니다.
                     """,
             parameters = {
-                    @Parameter(name = "stationId", description = "충전소 구역 코드(zone_code)",
+                    @Parameter(name = "stationId", description = "충전소 그룹 코드(group_code)",
                             example = "EVCS_B2F_01", required = true)
             }
     )

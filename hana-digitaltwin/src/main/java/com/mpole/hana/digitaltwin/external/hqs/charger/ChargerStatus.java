@@ -38,8 +38,8 @@ public final class ChargerStatus {
             return FAULTED;
         }
         return switch (raw.trim()) {
-            case "1" -> AVAILABLE;
-            case "2" -> CHARGING;
+            case "1", "1.0" -> AVAILABLE;
+            case "2", "2.0" -> CHARGING;
             default -> FAULTED;
         };
     }
