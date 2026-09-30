@@ -35,7 +35,7 @@ public record EventMetaResponse(
         Map<String, String> conditionKind,
         Map<String, String> effect,
         Map<String, String> cctvSource,
-        Map<String, String> notificationChannel,
+        Map<String, ChannelMeta> notificationChannel,
         Map<String, String> actionStatus,
         Map<String, String> eventStatus,
         Map<String, String> suppressMode
@@ -61,8 +61,10 @@ public record EventMetaResponse(
         for (CctvSource v : CctvSource.values()) cctvSource.put(v.name(), v.getDescription());
 
         // 이벤트 1건에서 발행되는 채널(tbl_event_action.channel)과 그 진행 상태.
-        Map<String, String> notificationChannel = new LinkedHashMap<>();
-        for (NotificationChannel v : NotificationChannel.values()) notificationChannel.put(v.name(), v.getDescription());
+        // 다른 enum 과 달리 값이 셋이다 — 화면이 제목·부연·준비중 배지를 다 이 메타로 그린다.
+        Map<String, ChannelMeta> notificationChannel = new LinkedHashMap<>();
+        for (NotificationChannel v : NotificationChannel.values())
+            notificationChannel.put(v.name(), new ChannelMeta(v.getLabel(), v.getDescription(), v.isReady()));
 
         Map<String, String> actionStatus = new LinkedHashMap<>();
         for (ActionStatus v : ActionStatus.values()) actionStatus.put(v.name(), v.getDescription());
@@ -88,5 +90,15 @@ public record EventMetaResponse(
                 Collections.unmodifiableMap(eventStatus),
                 Collections.unmodifiableMap(suppressMode)
         );
+    }
+
+    /**
+     * 출력 채널 하나의 화면용 정보.
+     *
+     * @param label       카드 제목
+     * @param description 카드 부연
+     * @param ready       서버 쪽 실행기가 있는가. false 면 화면이 "준비중"으로 잠근다
+     */
+    public record ChannelMeta(String label, String description, boolean ready) {
     }
 }

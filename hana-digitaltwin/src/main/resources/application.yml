@@ -49,8 +49,8 @@ spring:
         # PostgreSQLDialect 를 상속해 enum CHECK 제약 생성만 차단한 커스텀 방언.
         # (global/config/NoEnumCheckPostgreSQLDialect.java 참고)
         dialect: com.mpole.hana.digitaltwin.global.config.NoEnumCheckPostgreSQLDialect
-        format_sql: true
-        show_sql: true
+        format_sql: false
+        show_sql: false
         default_batch_fetch_size: 1000 # 보통 100~500 권장
     defer-datasource-initialization: true  # JPA 테이블 생성 후 data.sql 실행
 
@@ -60,9 +60,9 @@ spring:
 #  - org.hibernate.tool.schema=debug  : 시작 시 생성/변경(ALTER/CREATE) DDL
 logging:
   level:
-    org.hibernate.SQL: debug
+    org.hibernate.SQL: INFO
     org.hibernate.orm.jdbc.bind: trace
-    org.hibernate.tool.schema: debug
+    org.hibernate.tool.schema: INFO
 
 # JWT 설정 (관제 시스템 최적화)
 jwt:
@@ -133,7 +133,7 @@ hdt:
       timeout-ms: 3000
       token-response-field: accessToken
     hqs:
-      base-url: http://10.167.136.155:18080   # HQS 운영 서버
+      base-url: #http://100.78.173.16/partner-api/   # HQS 운영 서버
       paths:
         login: /api/v1/login/external         # JWT 발급. 이 호출만 Authorization 없이 나간다
         wc-button: /inbound/device/api/v1/wcinfo/alarm   # 화장실 물리버튼 알림 전송 경로

@@ -37,7 +37,7 @@ import java.util.List;
  *
  * <h3>중복 발생을 막는 방식</h3>
  * 시간 기반 cooldown 이 아니라 <b>Active 축</b>이다 — 같은 규칙+포인트에 활성 이벤트가 있으면 새로
- * 발생시키지 않는다(DB 부분 유니크 인덱스가 보증). {@code cooldown_sec} 이 사문화된 이유다.
+ * 발생시키지 않는다(DB 부분 유니크 인덱스가 보증). 그래서 시간 기반 쿨다운 설정이 없다(2026-09-30 삭제).
  */
 @Entity
 @Table(name = "tbl_event_rule")
@@ -107,15 +107,8 @@ public class EventRule extends DateEntity {
     @Comment("지속 시간(초). 조건이 이 시간만큼 계속 성립해야 발생시킨다. 0=즉시. 인메모리 계측이라 재기동 시 초기화")
     private int sustainSec = 0;
 
-    /**
-     * @deprecated Active 축(활성 이벤트가 있으면 발생 억제)이 중복을 구조적으로 막으므로 평가에서 쓰이지 않는다.
-     * 기존 화면 계약 유지를 위해 필드만 남긴다. 대신 {@link #deadband}/{@link #suppressMode} 를 쓴다.
-     */
-    @Deprecated
-    @Column(name = "cooldown_sec")
-    @Builder.Default
-    @Comment("(미사용) 구 재발생 억제 시간. Active 축이 중복을 구조적으로 막아 불필요해졌다")
-    private int cooldownSec = 0;
+    // cooldown_sec 은 2026-09-30 삭제 — Active 축이 중복을 구조적으로 막아 시간 기반 억제가 필요 없다.
+    // 컬럼 drop: scripts/event/2026-09-30-drop-cooldown-sec.sql (코드 배포 전 선실행)
 
     /**
      * <b>발생</b> 임계는 그대로 두고 <b>해소</b> 임계만 완화한다.

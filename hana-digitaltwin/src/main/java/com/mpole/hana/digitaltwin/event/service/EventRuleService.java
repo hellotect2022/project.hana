@@ -48,7 +48,6 @@ public class EventRuleService {
                 .operator(req.operator())
                 .triggerValue(req.triggerValue())
                 .sustainSec(req.sustainSec())
-                .cooldownSec(req.cooldownSec())
                 .deadband(req.deadband())
                 .suppressMode(req.suppressMode() != null ? req.suppressMode() : SuppressMode.WHILE_ACTIVE)
                 .active(req.active() != null ? req.active() : Boolean.TRUE)
@@ -88,7 +87,6 @@ public class EventRuleService {
         rule.setOperator(req.operator());
         rule.setTriggerValue(req.triggerValue());
         rule.setSustainSec(req.sustainSec());
-        rule.setCooldownSec(req.cooldownSec());
         rule.setDeadband(req.deadband());
         rule.setSuppressMode(req.suppressMode() != null ? req.suppressMode() : SuppressMode.WHILE_ACTIVE);
         rule.setActive(req.active() != null ? req.active() : Boolean.TRUE);

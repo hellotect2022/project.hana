@@ -76,7 +76,7 @@
         <appender-ref ref="EMBLAZE_FILE"/>
     </appender>
 
-    <logger name="com.mpole.hana.digitaltwin.integration.emblaze" level="INFO" additivity="false">
+    <logger name="com.mpole.hana.digitaltwin.external" level="INFO" additivity="false">
         <appender-ref ref="EMBLAZE_ASYNC"/>
         <appender-ref ref="CONSOLE" />
     </logger>

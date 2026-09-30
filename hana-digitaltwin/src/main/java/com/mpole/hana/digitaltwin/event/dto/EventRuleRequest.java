@@ -11,8 +11,8 @@ import java.util.List;
 /**
  * 이벤트 규칙 등록/수정 요청.
  *
- * <p>{@code cooldownSec} 는 Active 축 도입으로 평가에서 더 이상 쓰이지 않는다(기존 화면 호환용).
- * 중복 억제는 {@code suppressMode}, 플래핑 방지는 {@code deadband} 가 담당한다.</p>
+ * <p>시간 기반 쿨다운은 없다(2026-09-30 삭제). 중복 억제는 Active 축 + {@code suppressMode},
+ * 플래핑 방지는 {@code deadband} 가 담당한다.</p>
  */
 @Builder
 public record EventRuleRequest(
@@ -27,7 +27,6 @@ public record EventRuleRequest(
         RuleOperator operator,
         String triggerValue,
         int sustainSec,
-        int cooldownSec,
         Double deadband,
         SuppressMode suppressMode,
         Boolean active,

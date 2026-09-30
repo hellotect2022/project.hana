@@ -26,7 +26,6 @@ public record EventRuleResponse(
         RuleOperator operator,
         String triggerValue,
         int sustainSec,
-        int cooldownSec,
         Double deadband,
         SuppressMode suppressMode,
         Boolean active,
@@ -68,7 +67,6 @@ public record EventRuleResponse(
                 .operator(p.getOperator())
                 .triggerValue(p.getTriggerValue())
                 .sustainSec(p.getSustainSec())
-                .cooldownSec(p.getCooldownSec())
                 .deadband(p.getDeadband())
                 .suppressMode(p.getSuppressMode())
                 .active(p.getActive())

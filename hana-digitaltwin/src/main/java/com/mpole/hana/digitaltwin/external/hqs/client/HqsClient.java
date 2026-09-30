@@ -111,7 +111,20 @@ public class HqsClient {
             return HqsCallResult.of(response, trxId);
 
         } catch (RestClientResponseException e) {
-            // 4xx/5xx — 본문에 code/message 가 실려 올 수 있어 그대로 남긴다
+            // 4xx/5xx — HQS 는 인증 실패를 401 + 표준 본문(code=IF241/IF243 …)으로 돌려준다.
+            // 본문이 표준 봉투로 읽히고 인증 실패 코드면 정상 응답과 같은 경로로 돌려보내
+            // 호출부(postWcButton)의 토큰 재발급·1회 재시도가 그대로 동작하게 한다.
+            HqsOutboundResponse errBody = null;
+            try {
+                errBody = e.getResponseBodyAs(HqsOutboundResponse.class);
+            } catch (Exception ignore) {
+                // JSON 봉투가 아닌 본문(게이트웨이 HTML 등) — 아래 일반 실패 로그로 남긴다
+            }
+            if (errBody != null && errBody.isAuthFailure()) {
+                log.error("HQS 인증 실패 url={} trxId={} status={} code={} message={}",
+                        url, trxId, e.getStatusCode(), errBody.code(), errBody.message());
+                return HqsCallResult.of(errBody, trxId);
+            }
             log.error("HQS 호출 실패 url={} trxId={} status={} body={}",
                     url, trxId, e.getStatusCode(), e.getResponseBodyAsString());
             return HqsCallResult.transportFail(trxId, "HTTP " + e.getStatusCode().value());
