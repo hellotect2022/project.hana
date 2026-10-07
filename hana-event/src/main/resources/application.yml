@@ -1,6 +1,6 @@
 server:
-  #port: 8081
-  port: 8088
+  port: 8081
+  #port: 8088
 
 storage:
   postgres:
@@ -47,6 +47,12 @@ hdt:
   dbview:
     view02:
       enabled: true
+
+  # 이벤트 평가 보조 주기 작업(eventTaskScheduler 전용 스레드, gateway 의 dbview.viewNN 폴링과 같은 방식)
+  event:
+    rule-refresh-ms: 30000                # 규칙 캐시(EventRuleCache) 리로드 주기 = 규칙 변경의 최대 반영 지연
+    ack-sweep-ms: 30000                   # UNTIL_ACKED 억제 해제 확인(ActiveEventStore) 주기
+    dump-active-on-change: true           # 발생·해소·재활성·확인마다 활성맵 전체를 격자로 INFO 로그(개발자용). 운영에서 활성 수백 건이면 false
 
 management:
   server:
