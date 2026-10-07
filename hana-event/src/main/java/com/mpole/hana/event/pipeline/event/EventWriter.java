@@ -49,11 +49,8 @@ public class EventWriter {
              (:eventId, :ruleId, :ruleName, :eventCode, :level, :scope, :deviceId, :deviceKey, :pointId, :tagName,
               :pointType, :valueRaw, :thresholdValue, :operator, :triggerValue,
               :outputs::jsonb, :icon, :effect, :occurredAt, :clearedAt, :ackedAt, 1, :occurredAt)
-            ON CONFLICT (rule_id, device_id, point_id) WHERE cleared_at IS NULL AND NOT simulated DO NOTHING
+            ON CONFLICT (rule_id, device_id, point_id) WHERE cleared_at IS NULL DO NOTHING
             """;
-    // ↑ 2026-10-07: 부분 유니크 uk_event_open 의 술어가 "cleared_at IS NULL AND NOT simulated" 로 바뀜(모의 이벤트 분리).
-    //   ON CONFLICT 의 WHERE 는 인덱스 술어와 정확히 같아야 PostgreSQL 이 인덱스를 찾는다(다르면 42P10).
-    //   simulated 는 INSERT 목록에 없으므로 DEFAULT false 로 들어간다 — event 서버는 모의 행을 만들지 않는다.
 
     /**
      * 재활성 UPDATE(2026-10-02 B안) — 해소·미확인 이벤트에 조건이 다시 성립. 새 행 대신 같은 행을 다시 연다.

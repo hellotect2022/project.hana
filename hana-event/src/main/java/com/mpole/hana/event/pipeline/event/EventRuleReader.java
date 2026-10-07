@@ -169,12 +169,9 @@ public class EventRuleReader {
     public Flux<ActiveEventRow> loadActiveEvents() {
         String sql = ACTIVE_ROW_SELECT + """
                  WHERE e.acked_at IS NULL
-                   AND NOT e.simulated
                    AND COALESCE(r.suppress_mode, 'UNTIL_ACKED') <> 'NONE'
                  ORDER BY (e.cleared_at IS NULL) ASC, COALESCE(e.last_occurred_at, e.occurred_at) ASC
                 """;
-        // NOT e.simulated (2026-10-07): 모의 이벤트(digitaltwin REST 가 만든 SOP 훈련 행)는 활성맵에 올리지 않는다.
-        // 평가기가 모르므로 실제 값이 들어와도 모의가 꺼지지 않고, 같은 키의 진짜 이벤트는 별도 행으로 정상 발생한다.
         return postgresDatabaseClient.sql(sql)
                 .map(EventRuleReader::toActiveRow)
                 .all()
@@ -191,7 +188,6 @@ public class EventRuleReader {
                    AND e.device_id = :deviceId
                    AND e.point_id IS NOT DISTINCT FROM :pointId
                    AND e.cleared_at IS NULL
-                   AND NOT e.simulated
                  ORDER BY COALESCE(e.last_occurred_at, e.occurred_at) DESC
                  LIMIT 1
                 """;
