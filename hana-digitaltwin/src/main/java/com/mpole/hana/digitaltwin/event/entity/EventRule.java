@@ -12,8 +12,7 @@ import java.util.List;
 /**
  * 이벤트 규칙({@code tbl_event_rule}) — <b>무엇을 감시하고, 걸리면 어떤 채널을 켤지</b>의 설정.
  *
- * <p>3계층(설정 → 발생 → 발행) 중 <b>설정</b>을 담당한다. 실제 발생 기록은 {@link Event},
- * 채널별 발행은 {@link EventAction} 이다. 전체 구조는
+ * <p>2계층(설정 → 발생) 중 <b>설정</b>을 담당한다. 실제 발생 기록은 {@link Event} 다. 전체 구조는
  * {@link com.mpole.hana.digitaltwin.event.entity 패키지 설명} 참고.</p>
  *
  * <h3>관계</h3>
@@ -59,6 +58,15 @@ public class EventRule extends DateEntity {
     @Comment("규칙명. 발생 시 tbl_event.rule_name 으로 복사되어, 나중에 규칙명을 바꿔도 과거 이벤트 표시는 그대로 유지된다")
     private String ruleName;
 
+    /**
+     * 이벤트 코드 — 클라이언트(Unity/웹)가 이벤트 종류를 분기하는 식별자(예: WC_CLEAN, FIRE_DETECT).
+     * <p>발생 시 {@code tbl_event.event_code} 로 스냅샷되고, 웹소켓 봉투의 {@code eventType} 으로 나간다
+     * (비어 있으면 "EVENT"). 평가에는 쓰이지 않는다. 2026-10-01 추가.</p>
+     */
+    @Column(name = "event_code", length = 50)
+    @Comment("이벤트 코드(클라이언트 분기용, 예 WC_CLEAN). 발생 시 tbl_event.event_code 로 복사되고 웹소켓 eventType 으로 나간다. 비어 있으면 EVENT")
+    private String eventCode;
+
     @Column(columnDefinition = "TEXT")
     @Comment("규칙 설명(운영 메모). 평가에 쓰이지 않는다")
     private String description;
@@ -86,17 +94,8 @@ public class EventRule extends DateEntity {
     private String pointType;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "condition_kind")
-    @Comment("조건 종류. THRESHOLD=아날로그 임계치 비교(operator+level별 threshold) / TOGGLE=디지털 상태값 일치(trigger_value)")
-    private RuleConditionKind conditionKind;
-
-    @Enumerated(EnumType.STRING)
-    @Comment("THRESHOLD 비교 연산자(GTE/LTE/GT/LT). TOGGLE 이면 사용하지 않는다")
+    @Comment("판정 연산자. GTE/LTE/GT/LT=레벨별 threshold_value 비교, EQ=레벨별 trigger_value 일치. condition_kind 는 2026-10-01 폐기")
     private RuleOperator operator;
-
-    @Column(name = "trigger_value")
-    @Comment("TOGGLE 트리거값. 포인트 값을 on/off 로 정규화해 이 값과 일치하면 조건 성립. THRESHOLD 면 사용하지 않는다")
-    private String triggerValue;
 
     /**
      * 순간적인 노이즈로 알람이 뜨는 것을 막는다. 이 시간은 인메모리로 계측하므로
@@ -119,12 +118,12 @@ public class EventRule extends DateEntity {
     @Comment("해소 판정 여유값. 발생 임계는 그대로, 해소 임계만 완화해 플래핑을 막는다(GTE/GT는 -, LTE/LT는 +). null=0")
     private Double deadband;
 
-    /** 해소된 <b>뒤</b>의 동작만 가른다. 성립 중 억제는 두 모드 모두 동일하다. */
+    /** 알람 종류. UNTIL_ACKED=상태형(기본, 확인 전까지 억제) / NONE=사건형. WHILE_ACTIVE 는 2026-10-02 폐기. */
     @Enumerated(EnumType.STRING)
     @Column(name = "suppress_mode", nullable = false, length = 16)
     @Builder.Default
-    @Comment("해소 후 재발생 억제 범위. WHILE_ACTIVE=성립 중에만(기본) / UNTIL_ACKED=사람이 확인할 때까지")
-    private SuppressMode suppressMode = SuppressMode.WHILE_ACTIVE;
+    @Comment("알람 종류. UNTIL_ACKED=상태형(기본, 관제자 확인 전까지 억제) / NONE=사건형(메시지 1건=이벤트 1건). WHILE_ACTIVE 는 2026-10-02 폐기")
+    private SuppressMode suppressMode = SuppressMode.UNTIL_ACKED;
 
     @Builder.Default
     @Comment("규칙 사용 여부. false 면 event-server 가 평가 인덱스에 아예 싣지 않는다(최대 30초 내 반영)")

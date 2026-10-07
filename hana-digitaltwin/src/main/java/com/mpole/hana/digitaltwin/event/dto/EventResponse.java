@@ -20,6 +20,7 @@ public record EventResponse(
         UUID eventId,
         Long ruleId,
         String ruleName,
+        String eventCode,
         String level,
         String scope,
         Long deviceId,
@@ -27,7 +28,6 @@ public record EventResponse(
         Long pointId,
         String tagName,
         String pointType,
-        String conditionKind,
         String valueRaw,
         Double thresholdValue,
         String operator,
@@ -35,14 +35,14 @@ public record EventResponse(
         String icon,
         EventEffect effect,
         OffsetDateTime occurredAt,
-        boolean active,
+        int occurrenceCount,         // 성립 횟수(재활성마다 +1)
+        OffsetDateTime lastOccurredAt,
+        boolean active,              // 파생값: clearedAt == null (컬럼 아님)
         OffsetDateTime clearedAt,
         String clearedValue,
         OffsetDateTime ackedAt,
         Long ackedBy,
-        EventStatus status,
-        OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        EventStatus status
 ) {
     public static EventResponse from(Event h) {
         if (h == null) return null;
@@ -50,6 +50,7 @@ public record EventResponse(
                 .eventId(h.getEventId())
                 .ruleId(h.getRuleId())
                 .ruleName(h.getRuleName())
+                .eventCode(h.getEventCode())
                 .level(h.getLevel())
                 .scope(h.getScope())
                 .deviceId(h.getDeviceId())
@@ -57,7 +58,6 @@ public record EventResponse(
                 .pointId(h.getPointId())
                 .tagName(h.getTagName())
                 .pointType(h.getPointType())
-                .conditionKind(h.getConditionKind())
                 .valueRaw(h.getValueRaw())
                 .thresholdValue(h.getThresholdValue())
                 .operator(h.getOperator())
@@ -65,14 +65,14 @@ public record EventResponse(
                 .icon(h.getIcon())
                 .effect(h.getEffect())
                 .occurredAt(h.getOccurredAt())
+                .occurrenceCount(h.getOccurrenceCount())
+                .lastOccurredAt(h.getLastOccurredAt())
                 .active(h.isActive())
                 .clearedAt(h.getClearedAt())
                 .clearedValue(h.getClearedValue())
                 .ackedAt(h.getAckedAt())
                 .ackedBy(h.getAckedBy())
                 .status(h.getStatus())
-                .createdAt(h.getCreatedAt())
-                .updatedAt(h.getUpdatedAt())
                 .build();
     }
 }

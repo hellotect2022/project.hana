@@ -1,5 +1,5 @@
 server:
-  port: 8084
+  port: 8082
 
 # Swagger UI: 어노테이션 런타임 스펙 대신, 테스트로 생성된 OpenAPI(/docs/openapi3.json)를 로드 (순수 REST Docs)
 springdoc:
@@ -15,6 +15,18 @@ springdoc:
 spring:
   application:
     name: hana-digitaltwin
+
+  # 물리버튼(enocean) → DeviceBundle → view01 발행용 producer (2026-10-01). gateway/event 와 같은 브로커.
+  # 역직렬화는 event 가 spring.json.value.default.type=DeviceBundle 로 하므로 타입 헤더를 붙이지 않는다.
+  kafka:
+    bootstrap-servers: 192.168.250.249:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
 
   datasource:
     main:
@@ -115,6 +127,9 @@ management:
       enabled: false
 
 hdt:
+  kafka:
+    topic:
+      view01: view01                      # gateway/event 의 hdt.kafka.topic.view01 과 동일해야 함 (버튼 번들 발행)
   monitor:
     targets:
       event: http://localhost:8091

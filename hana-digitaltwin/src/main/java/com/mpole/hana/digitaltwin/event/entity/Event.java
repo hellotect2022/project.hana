@@ -1,7 +1,6 @@
 package com.mpole.hana.digitaltwin.event.entity;
 
 import com.mpole.hana.common.dto.OutputSpec;
-import com.mpole.hana.digitaltwin.global.repository.DateEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Comment;
@@ -14,18 +13,14 @@ import java.util.UUID;
 /**
  * 이벤트 발생 1건({@code tbl_event}) — <b>실제로 일어난 것</b>의 불변 기록 + 상태 2축.
  *
- * <p>3계층(설정 → 발생 → 발행) 중 <b>발생</b>을 담당한다. 무엇을 감시할지는 {@link EventRule},
- * 이 건에서 무엇을 발행했는지는 {@link EventAction} 이다.</p>
+ * <p>2계층(설정 → 발생) 중 <b>발생</b>을 담당한다. 무엇을 감시할지는 {@link EventRule} 이고,
+ * 무엇을 표출할지는 이 행의 {@code outputs} 스냅샷이다. (채널별 발행 로그 {@code tbl_event_action} 은 2026-10-02 폐기.)</p>
  *
  * <h3>관계</h3>
  * <pre>
  *   EventRule / EventRuleLevel ──(발생 순간 값 복사)──▶ ┌───────────────┐
  *   tbl_device      ◀── device_id (소프트 참조) ─────── │ Event(이 클래스)│
- *   tbl_device_point◀── point_id  (소프트 참조) ─────── └───────┬───────┘
- *                                                              │ 1 : N (소프트 참조, FK 없음)
- *                                                      ┌───────▼───────┐
- *                                                      │ EventAction   │ 채널마다 1행
- *                                                      └───────────────┘
+ *   tbl_device_point◀── point_id  (소프트 참조) ─────── └───────────────┘
  * </pre>
  *
  * <h3>왜 값을 복사(스냅샷)해 두는가</h3>
@@ -36,25 +31,30 @@ import java.util.UUID;
  * <h3>상태 2축 (ISA-18.2 모델)</h3>
  * <pre>
  *                     acked_at = null        acked_at 있음
- *   active = true     ACTIVE_UNACK           ACTIVE_ACK
- *   active = false    CLEARED_UNACK          CLOSED
+ *   cleared_at null   ACTIVE_UNACK           ACTIVE_ACK
+ *   cleared_at 있음   CLEARED_UNACK          CLOSED
  * </pre>
  * 두 축은 <b>서로 독립</b>이다 — 값이 정상 복귀해도 아무도 확인하지 않았을 수 있고(CLEARED_UNACK),
  * 확인했어도 조건은 계속 성립할 수 있다(ACTIVE_ACK). 조합은 {@link #getStatus()} 가 계산한다.
  *
  * <h3>생명주기</h3>
  * <pre>
- *   조건 성립 & 활성 없음 → INSERT(active=true) + 액션 발행 + 웹소켓 EVENT
+ *   조건 성립 & 활성 없음 → INSERT(cleared_at=null) + 액션 발행 + 웹소켓 EVENT
  *   조건 성립 & 활성 있음 → 무시                      ← 중복 억제(cooldown 불필요)
- *   조건 해소 & 활성 있음 → active=false, cleared_*   + 웹소켓 EVENT_CLEAR
- *   사람이 확인          → acked_at / acked_by       + POPUP 액션 DONE
- *   2개월 경과 & !active → core.purge_events() 로 삭제 (활성 건은 오래돼도 남긴다)
+ *   조건 해소 & 활성 있음 → cleared_at / cleared_value + 웹소켓 EVENT_CLEAR
+ *   사건형(NONE)          → INSERT(cleared_at=occurred_at) — 발생 즉시 닫힘
+ *   관제자 확인          → acked_at / acked_by + 미해소면 cleared_at 도 닫음 = 종료 (2026-10-02)
+ *   2개월 경과 & 해소됨   → core.purge_events() 로 삭제 (미해소 건은 오래돼도 남긴다)
  * </pre>
+ *
+ * <p>2026-10-01 — {@code active}(boolean)·{@code created_at}·{@code updated_at} 컬럼 삭제.
+ * 활성 여부는 {@code cleared_at IS NULL} 하나로 판정하고(boolean 과 시각이 중복), 시각은
+ * occurred_at / cleared_at / acked_at 세 개가 전부다. 그래서 {@code DateEntity} 를 상속하지 않는다.</p>
  *
  * <h3>쓰기 주체</h3>
  * 스키마는 digitaltwin(JPA, ddl-auto=update)이 소유하지만 <b>발생 INSERT·해소 UPDATE 는
  * event-server(WebFlux/R2DBC)</b>가 한다. digitaltwin 이 쓰는 것은 사람이 만드는 확인(ack)뿐이다.
- * 그래서 event-server 가 문자열로 넣는 값(level/scope/operator/conditionKind/pointType)은
+ * 그래서 event-server 가 문자열로 넣는 값(level/scope/operator/pointType)은
  * enum 매핑을 강제하지 않고 String 으로 받는다.
  */
 @Entity
@@ -72,7 +72,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Event extends DateEntity {
+public class Event {
 
     /**
      * UUIDv7 — 발생 시점에 event-server 가 생성한다(DB 생성 아님).
@@ -91,6 +91,10 @@ public class Event extends DateEntity {
     @Column(name = "rule_name")
     @Comment("발생 시점의 규칙명 스냅샷. 나중에 규칙명을 바꿔도 과거 이벤트 표시는 그대로다")
     private String ruleName;
+
+    @Column(name = "event_code", length = 50)
+    @Comment("발생 시점의 규칙 event_code 스냅샷(클라이언트 분기용). 웹소켓 eventType 으로 나간 값. null 이면 EVENT 로 나갔다. 2026-10-01 추가")
+    private String eventCode;
 
     @Column(name = "level")
     @Comment("발생 심각도(CAUTION/WARNING/CRITICAL). 여러 등급이 성립했을 때 채택된 최고 심각도")
@@ -120,9 +124,7 @@ public class Event extends DateEntity {
     @Comment("포인트 타입 스냅샷(AI/DI 등)")
     private String pointType;
 
-    @Column(name = "condition_kind")
-    @Comment("판정 방식 스냅샷(THRESHOLD/TOGGLE)")
-    private String conditionKind;
+    // condition_kind 는 2026-10-01 삭제 — 판정 방식은 operator 로 판별(EQ=일치, 그 외 비교). DB 컬럼도 DROP.
 
     @Column(name = "value_raw")
     @Comment("발생 순간의 포인트 원시값. '왜 떴는지'의 근거")
@@ -141,12 +143,12 @@ public class Event extends DateEntity {
     private String triggerValue;
 
     /**
-     * 발생 레벨의 {@code outputs} 를 그대로 복사한 값. 조립 API 가 이 값으로 SOP/CCTV 표출을 결정하고,
-     * 켜진 채널 수만큼 {@link EventAction} 행이 만들어진다. 비어 있으면 표시 전용 이벤트다.
+     * 발생 레벨의 {@code outputs} 를 그대로 복사한 값. 조립 API 와 웹소켓 봉투가 이 값으로 팝업/SOP/CCTV 표출을 결정한다.
+     * 비어 있으면 표시 전용 이벤트다.
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "outputs", columnDefinition = "jsonb")
-    @Comment("발생 레벨의 출력 채널 세트 스냅샷. 켜진 채널 수만큼 tbl_event_action 행이 생기고, 조립 API 가 이 값으로 SOP/CCTV 표출을 결정한다")
+    @Comment("발생 레벨의 출력 채널 세트 스냅샷. 조립 API·웹소켓이 이 값으로 팝업/SOP/CCTV 표출을 결정한다")
     private OutputSpec outputs;
 
     @Column(name = "icon")
@@ -164,34 +166,50 @@ public class Event extends DateEntity {
 
     /* ─────────────────────────────────────────────────────────────
      * 상태 2축 — 서로 독립이다(ISA-18.2 모델).
-     *   active : 조건이 지금도 성립 중인가        (시스템 판단)
-     *   acked  : 운전원이 확인했는가              (사람 판단)
+     *   cleared_at : 조건이 해소됐는가(null = 지금도 성립 중)   (시스템 판단)
+     *   acked_at   : 관제자가 확인했는가(null = 미확인)          (사람 판단)
      * 값이 정상 복귀해도 확인되지 않을 수 있고, 확인했어도 조건은 계속 성립할 수 있다.
+     * 화면의 "완료 여부" 는 cleared_at 기준이다(2026-10-01 — 이전엔 acked_at).
      * ───────────────────────────────────────────────────────────── */
 
     /**
-     * 조건 성립 중 여부. 부분 유니크 인덱스
-     * {@code UNIQUE(rule_id, device_id, point_id) WHERE active} 가 걸려 있어
+     * 정상 복귀(해소) 시각. null 이면 아직 해소되지 않음(= 활성). 부분 유니크 인덱스
+     * {@code uk_event_open UNIQUE(rule_id, device_id, point_id) WHERE cleared_at IS NULL} 이 걸려 있어
      * 같은 규칙+포인트의 활성 이벤트는 DB 레벨에서 1건만 존재한다(중복 발생 차단).
+     * 사건형(suppress_mode=NONE)은 occurred_at 과 같은 값으로 바로 닫혀 들어간다.
      */
-    @Column(name = "active", nullable = false)
-    @Builder.Default
-    @Comment("[Active 축·시스템] 조건이 지금도 성립 중인가. UNIQUE(rule_id,device_id,point_id) WHERE active 로 같은 규칙+포인트의 활성 건은 1개만 존재한다(중복 발생 차단). 활성 건은 보관 기간이 지나도 삭제하지 않는다")
-    private boolean active = true;
-
-    /** 정상 복귀(해소) 시각. null 이면 아직 해소되지 않음. */
     @Column(name = "cleared_at")
-    @Comment("[Active 축] 정상 복귀(해소) 시각. null 이면 아직 해소되지 않았다. 해소 시 웹소켓으로 EVENT_CLEAR 가 나간다")
+    @Comment("[Active 축·시스템] 정상 복귀(해소) 시각. null 이면 아직 성립 중(활성). UNIQUE(rule_id,device_id,point_id) WHERE cleared_at IS NULL 로 활성 건은 1개만 존재한다. 사건형은 occurred_at 과 같은 값. 미해소 건은 보관 기간이 지나도 삭제하지 않는다")
     private OffsetDateTime clearedAt;
+
+    /** 조건이 지금도 성립 중인가(컬럼 아님). */
+    @Transient
+    public boolean isActive() {
+        return clearedAt == null;
+    }
+
+    /**
+     * 같은 이벤트의 성립 횟수(2026-10-02 B안). 최초 발생 1. 해소됐지만 미확인인 상태에서 조건이 다시 성립하면
+     * 새 행 대신 이 행이 재활성되며(cleared_at=null) +1 된다. 클라이언트에는 같은 eventId 로 발생 통지가 다시 나간다.
+     */
+    @Column(name = "occurrence_count", nullable = false)
+    @Builder.Default
+    @Comment("성립 횟수. 최초 1, 해소·미확인 상태에서 재성립할 때마다 +1(같은 행 재활성). 2026-10-02")
+    private int occurrenceCount = 1;
+
+    /** 마지막 성립 시각. 최초 발생 때는 occurred_at 과 같고, 재활성 때마다 갱신된다. */
+    @Column(name = "last_occurred_at")
+    @Comment("마지막 성립 시각. 최초=occurred_at, 재활성마다 갱신. 2026-10-02")
+    private OffsetDateTime lastOccurredAt;
 
     /** 해소 시점의 포인트 값. */
     @Column(name = "cleared_value")
     @Comment("[Active 축] 해소 시점의 포인트 값. deadband 를 넘어 정상 범위로 돌아온 값이 기록된다")
     private String clearedValue;
 
-    /** 운전원 확인 시각. null 이면 미확인. */
+    /** 관제자 확인 시각. null 이면 미확인. */
     @Column(name = "acked_at")
-    @Comment("[Ack 축·사람] 운전원 확인 시각. active 와 독립이라 해소 여부와 무관하게 기록된다. 최초 확인만 남고 재호출은 무시")
+    @Comment("[Ack 축·사람] 관제자 확인 시각. cleared_at 과 독립이라 해소 여부와 무관하게 기록된다. 최초 확인만 남고 재호출은 무시")
     private OffsetDateTime ackedAt;
 
     @Column(name = "acked_by")
@@ -201,7 +219,7 @@ public class Event extends DateEntity {
     /** 조회 편의용 파생 상태(컬럼 아님) — 두 축의 조합. */
     @Transient
     public EventStatus getStatus() {
-        if (active) {
+        if (clearedAt == null) {
             return ackedAt == null ? EventStatus.ACTIVE_UNACK : EventStatus.ACTIVE_ACK;
         }
         return ackedAt == null ? EventStatus.CLEARED_UNACK : EventStatus.CLOSED;

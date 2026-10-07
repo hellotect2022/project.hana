@@ -4,7 +4,6 @@ import com.mpole.hana.common.constant.SuppressMode;
 import com.mpole.hana.digitaltwin.event.dto.EventRuleLevelItem;
 import com.mpole.hana.digitaltwin.event.dto.EventRuleRequest;
 import com.mpole.hana.digitaltwin.event.dto.EventRuleResponse;
-import com.mpole.hana.digitaltwin.event.entity.RuleConditionKind;
 import com.mpole.hana.digitaltwin.event.entity.EventRule;
 import com.mpole.hana.digitaltwin.event.entity.EventRuleLevel;
 import com.mpole.hana.digitaltwin.event.entity.RuleScope;
@@ -38,18 +37,17 @@ public class EventRuleService {
 
         EventRule rule = EventRule.builder()
                 .ruleName(req.ruleName())
+                .eventCode(normalizeEventCode(req.eventCode()))
                 .description(req.description())
                 .scope(req.scope())
                 .categoryId(req.categoryId())
                 .deviceId(req.deviceId())
                 .tagName(req.tagName())
                 .pointType(req.pointType())
-                .conditionKind(req.conditionKind())
                 .operator(req.operator())
-                .triggerValue(req.triggerValue())
                 .sustainSec(req.sustainSec())
                 .deadband(req.deadband())
-                .suppressMode(req.suppressMode() != null ? req.suppressMode() : SuppressMode.WHILE_ACTIVE)
+                .suppressMode(normalizeSuppressMode(req.suppressMode()))
                 .active(req.active() != null ? req.active() : Boolean.TRUE)
                 .build();
 
@@ -77,18 +75,17 @@ public class EventRuleService {
 
         EventRule rule = findOrThrow(id);
         rule.setRuleName(req.ruleName());
+        rule.setEventCode(normalizeEventCode(req.eventCode()));
         rule.setDescription(req.description());
         rule.setScope(req.scope());
         rule.setCategoryId(req.categoryId());
         rule.setDeviceId(req.deviceId());
         rule.setTagName(req.tagName());
         rule.setPointType(req.pointType());
-        rule.setConditionKind(req.conditionKind());
         rule.setOperator(req.operator());
-        rule.setTriggerValue(req.triggerValue());
         rule.setSustainSec(req.sustainSec());
         rule.setDeadband(req.deadband());
-        rule.setSuppressMode(req.suppressMode() != null ? req.suppressMode() : SuppressMode.WHILE_ACTIVE);
+        rule.setSuppressMode(normalizeSuppressMode(req.suppressMode()));
         rule.setActive(req.active() != null ? req.active() : Boolean.TRUE);
 
         // 레벨 전체 교체 (orphanRemoval 로 기존 레벨 삭제)
@@ -146,6 +143,7 @@ public class EventRuleService {
             EventRuleLevel level = EventRuleLevel.builder()
                     .level(item.level())
                     .thresholdValue(item.thresholdValue())
+                    .triggerValue(item.triggerValue())
                     .icon(item.icon())
                     .effect(item.effect())
                     .displayOrder(item.displayOrder())
@@ -153,6 +151,21 @@ public class EventRuleService {
                     .build();
             rule.addLevel(level);
         }
+    }
+
+    /** 알람 종류 정리 — 미지정이면 UNTIL_ACKED(상태형 기본). 2026-10-02 WHILE_ACTIVE 삭제. */
+    private static SuppressMode normalizeSuppressMode(SuppressMode raw) {
+        return raw == null ? SuppressMode.UNTIL_ACKED : raw;
+    }
+
+    /**
+     * 이벤트 코드 정리 — 공백 제거, 대문자. 비어 있으면 null(웹소켓은 "EVENT" 로 나간다).
+     * 클라이언트가 문자열로 분기하므로 대소문자·공백 차이로 어긋나지 않게 서버에서 한 번 맞춘다.
+     */
+    private static String normalizeEventCode(String raw) {
+        if (raw == null) return null;
+        String v = raw.trim().toUpperCase();
+        return v.isEmpty() ? null : v;
     }
 
     private void validate(EventRuleRequest req) {
@@ -168,22 +181,21 @@ public class EventRuleService {
         if (req.scope() == RuleScope.DEVICE && req.deviceId() == null) {
             throw new IllegalArgumentException("scope=DEVICE 인 경우 deviceId 는 필수입니다.");
         }
-        if (req.conditionKind() == null) {
-            throw new IllegalArgumentException("조건 종류(conditionKind)는 필수입니다.");
+        if (req.operator() == null) {
+            throw new IllegalArgumentException("판정 연산자(operator)는 필수입니다.");
         }
-        if (req.conditionKind() == RuleConditionKind.THRESHOLD) {
-            if (req.operator() == null) {
-                throw new IllegalArgumentException("conditionKind=THRESHOLD 인 경우 operator 는 필수입니다.");
+        if (req.operator().isEquality()) {
+            boolean hasTrigger = req.levels() != null && req.levels().stream()
+                    .anyMatch(l -> l.triggerValue() != null && !l.triggerValue().replace(",", "").isBlank());
+            if (!hasTrigger) {
+                throw new IllegalArgumentException("operator=EQ 인 경우 하나 이상의 레벨에 triggerValue 가 필요합니다(여러 값은 쉼표 구분).");
             }
+        } else {
             boolean hasThreshold = req.levels() != null && req.levels().stream()
                     .anyMatch(l -> l.thresholdValue() != null);
             if (!hasThreshold) {
-                throw new IllegalArgumentException("conditionKind=THRESHOLD 인 경우 하나 이상의 레벨에 thresholdValue 가 필요합니다.");
+                throw new IllegalArgumentException("비교 연산자(GTE/LTE/GT/LT)인 경우 하나 이상의 레벨에 thresholdValue 가 필요합니다.");
             }
-        }
-        if (req.conditionKind() == RuleConditionKind.TOGGLE
-                && (req.triggerValue() == null || req.triggerValue().isBlank())) {
-            throw new IllegalArgumentException("conditionKind=TOGGLE 인 경우 triggerValue 는 필수입니다.");
         }
         if (req.levels() != null && req.levels().stream().anyMatch(l -> Objects.isNull(l.level()))) {
             throw new IllegalArgumentException("각 레벨 항목의 level 값은 필수입니다.");

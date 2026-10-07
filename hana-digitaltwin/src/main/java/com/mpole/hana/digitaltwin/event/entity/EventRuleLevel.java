@@ -21,15 +21,19 @@ import org.hibernate.type.SqlTypes;
  *                              │
  *                              │ outputs 를 발생 순간 그대로 복사(스냅샷)
  *                              ▼
- *                          Event.outputs ──▶ 켜진 채널 수만큼 EventAction 행 생성
+ *                          Event.outputs ──▶ 클라이언트가 보고 팝업/SOP/CCTV 를 연다
  * </pre>
  *
- * <h3>예시</h3>
+ * <h3>예시 — 비교(GTE)</h3>
  * <pre>
- *   규칙 "고온경보"  tag=TEMP, condition=THRESHOLD, operator=GTE
+ *   규칙 "고온경보"  tag=TEMP, operator=GTE
  *     ├ level=CAUTION  threshold=10  outputs={popup}                → 값 10.5 면 여기까지 성립
  *     ├ level=WARNING  threshold=11  outputs={popup, sop}
  *     └ level=CRITICAL threshold=12  outputs={popup, sop, cctv}     → 값 12.5 면 셋 다 성립 → CRITICAL 채택
+ *
+ *   규칙 "상태코드"  tag=STATUS, operator=EQ   (레벨별 trigger_value — 2026-10-01 구 TOGGLE 대체)
+ *     ├ level=CAUTION  trigger="2"
+ *     └ level=CRITICAL trigger="3,4"                                  → 값 "3.0" 이면 CRITICAL
  * </pre>
  */
 @Entity
@@ -63,8 +67,12 @@ public class EventRuleLevel extends DateEntity {
     private EventLevel level;
 
     @Column(name = "threshold_value")
-    @Comment("이 등급의 임계값(THRESHOLD 조건 전용). 규칙의 operator 로 포인트 값과 비교한다. TOGGLE 이면 null")
+    @Comment("이 등급의 임계값(비교 연산자 GTE/LTE/GT/LT 전용). 규칙의 operator 로 포인트 값과 비교한다. EQ 면 null")
     private Double thresholdValue;
+
+    @Column(name = "trigger_value")
+    @Comment("이 등급의 매칭값(일치 연산자 EQ 전용). 쉼표로 여러 값(예 2,3). 포인트 값이 그중 하나와 같으면 성립 — 숫자는 수치 동등, 문자열은 대소문자 무시. 비교 연산자면 null")
+    private String triggerValue;
 
     @Comment("이 등급에서 표시할 아이콘 키(클라이언트 렌더용). 평가에 쓰이지 않는다")
     private String icon;
@@ -85,6 +93,6 @@ public class EventRuleLevel extends DateEntity {
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "outputs", columnDefinition = "jsonb")
-    @Comment("이 등급 발생 시 켤 출력 채널 세트(popup/sop/cctv/sms/email/deviceControl). 발생 시 tbl_event.outputs 로 스냅샷 복사되고, 켜진 채널 수만큼 tbl_event_action 행이 생긴다")
+    @Comment("이 등급 발생 시 켤 출력 채널 세트(popup/sop/cctv/sms/email/deviceControl). 발생 시 tbl_event.outputs 로 스냅샷 복사된다")
     private OutputSpec outputs;
 }

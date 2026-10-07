@@ -1,7 +1,6 @@
 package com.mpole.hana.digitaltwin.event.dto;
 
 import com.mpole.hana.common.constant.SuppressMode;
-import com.mpole.hana.digitaltwin.event.entity.RuleConditionKind;
 import com.mpole.hana.digitaltwin.event.entity.RuleOperator;
 import com.mpole.hana.digitaltwin.event.entity.EventRule;
 import com.mpole.hana.digitaltwin.event.entity.RuleScope;
@@ -14,6 +13,7 @@ import java.util.List;
 public record EventRuleResponse(
         Long ruleId,
         String ruleName,
+        String eventCode,
         String description,
         RuleScope scope,
         Long categoryId,
@@ -22,9 +22,7 @@ public record EventRuleResponse(
         String deviceName,
         String tagName,
         String pointType,
-        RuleConditionKind conditionKind,
         RuleOperator operator,
-        String triggerValue,
         int sustainSec,
         Double deadband,
         SuppressMode suppressMode,
@@ -45,6 +43,7 @@ public record EventRuleResponse(
                 .map(l -> EventRuleLevelItem.builder()
                         .level(l.getLevel())
                         .thresholdValue(l.getThresholdValue())
+                        .triggerValue(l.getTriggerValue())
                         .icon(l.getIcon())
                         .effect(l.getEffect())
                         .displayOrder(l.getDisplayOrder())
@@ -55,6 +54,7 @@ public record EventRuleResponse(
         return EventRuleResponse.builder()
                 .ruleId(p.getRuleId())
                 .ruleName(p.getRuleName())
+                .eventCode(p.getEventCode())
                 .description(p.getDescription())
                 .scope(p.getScope())
                 .categoryId(p.getCategoryId())
@@ -63,9 +63,7 @@ public record EventRuleResponse(
                 .deviceName(deviceName)
                 .tagName(p.getTagName())
                 .pointType(p.getPointType())
-                .conditionKind(p.getConditionKind())
                 .operator(p.getOperator())
-                .triggerValue(p.getTriggerValue())
                 .sustainSec(p.getSustainSec())
                 .deadband(p.getDeadband())
                 .suppressMode(p.getSuppressMode())

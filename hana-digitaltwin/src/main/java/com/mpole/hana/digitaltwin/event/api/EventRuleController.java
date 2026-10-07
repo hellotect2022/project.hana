@@ -4,6 +4,7 @@ import com.mpole.hana.digitaltwin.event.dto.EventRuleRequest;
 import com.mpole.hana.digitaltwin.event.dto.EventRuleResponse;
 import com.mpole.hana.digitaltwin.event.service.EventRuleService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,7 +17,7 @@ import java.util.List;
 
 /**
  * 이벤트 규칙 관리 API — 무엇을 감시하고, 걸리면 어떤 채널을 켤지의 설정.
- * 실제 발생 기록은 {@link EventController}, 채널별 발행은 이벤트 액션이 담당한다.
+ * 실제 발생 기록 조회는 {@link EventController}, 평가·발생·해소·확인은 event-server 가 담당한다.
  */
 @Slf4j
 @RestController
@@ -27,7 +28,8 @@ public class EventRuleController {
 
     private final EventRuleService eventRuleService;
 
-    @Operation(summary = "이벤트 규칙 등록", description = "카테고리/장비 범위의 임계치(THRESHOLD) 또는 토글(TOGGLE) 규칙과 심각도 레벨을 등록합니다.")
+    @Operation(summary = "이벤트 규칙 등록", description = "카테고리/장비 범위의 규칙과 심각도 레벨을 등록합니다. "
+            + "operator 가 EQ 면 레벨별 triggerValue(쉼표 다중)로 일치 판정, 그 외(GTE/LTE/GT/LT)는 레벨별 thresholdValue 로 비교합니다.")
     @PostMapping
     public ResponseEntity<ApiResponse<EventRuleResponse>> create(@RequestBody EventRuleRequest request) {
         EventRuleResponse created = eventRuleService.create(request);
@@ -65,6 +67,8 @@ public class EventRuleController {
         return ResponseEntity.ok(ApiResponse.success("이벤트 규칙 수정", updated));
     }
 
+    // 2026-10-06 Swagger 숨김(사용자 결정) — 관리자 화면(SOP·알람 정책)만 호출. 외부에 노출할 계약이 아니다. 호출은 가능.
+    @Hidden
     @Operation(
             summary = "이벤트 규칙 삭제",
             description = "규칙 ID의 이벤트 규칙과 하위 레벨을 삭제합니다.",

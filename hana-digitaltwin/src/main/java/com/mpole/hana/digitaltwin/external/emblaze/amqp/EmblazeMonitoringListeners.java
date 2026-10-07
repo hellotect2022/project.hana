@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpole.hana.digitaltwin.external.emblaze.booth.BoothOccupancyService;
+import com.mpole.hana.digitaltwin.external.emblaze.button.ButtonEventPublisher;
 import com.mpole.hana.digitaltwin.external.emblaze.button.ButtonPressHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import java.time.OffsetDateTime;
  *   light   present_level / target_level / remaining_time → 조명(RL) 장비
  *   space   pir_accumulation                              → 재실센서(OCC) 장비
  *   enocean switch_number / index                         → 버튼(TB) 장비
+ *           ※ 2026-10-01 부터 enocean 은 직접 기록하지 않고 Kafka view01 로 발행한다(ButtonEventPublisher)
  * </pre>
  *
  * <h3>로그</h3>
@@ -48,6 +50,7 @@ public class EmblazeMonitoringListeners {
     private final EmblazeStatusRouter emblazeStatusRouter; // (uuid, 필드) → current_value 기록
     private final BoothOccupancyService boothOccupancyService;
     private final ButtonPressHandler buttonPressHandler; // 물리버튼: 부스 해석 → HQS 전송 + 파생 집계
+    private final ButtonEventPublisher buttonEventPublisher; // 물리버튼: DeviceBundle → Kafka view01 (2026-10-01, 직접 upsert 대체)
     private final EnOceanIndexDeduplicator enOceanIndexDeduplicator; // onEnocean 중복수신 제거
 
     /** 조명 메시지 → 밝기 기록 (부가 처리 없음) */
@@ -148,7 +151,15 @@ public class EmblazeMonitoringListeners {
             trace.ok("dedup", "PASS");
 
             // ① 원본(switch_number, index) 기록
-            recordRoute(trace, emblazeStatusRouter.route(deviceUuid, status, eventAt, trace));
+            // [2026-10-01 주석 처리] digitaltwin 직접 upsert 를 중단하고 Kafka view01 발행으로 대체한다.
+            //   event 서버가 현재값 기록(points 통째 교체)과 사건형 규칙 평가(suppress_mode=NONE)를 한다.
+            //   두 쓰기 주체가 같은 행을 치면 서로 덮으므로 여기서 끊는다. 롤백은 아래 줄을 되살리고
+            //   publish 호출을 주석한다. (light/space 큐는 계속 route() 로 쓴다 — 메서드 자체는 유지)
+            //   설계: docs/architecture/2026-10-01-wc-button-kafka-design.md
+            // recordRoute(trace, emblazeStatusRouter.route(deviceUuid, status, eventAt, trace));
+
+            // ①' 버튼 메시지를 DeviceBundle 로 Kafka view01 에 발행(매핑된 필드 전부 — switch_number, index)
+            buttonEventPublisher.publish(deviceUuid, status, eventAt, trace);
 
             // ② HQS 전송 + 요청 종류별 누적 집계
             if (switchNumber.isEmpty()) {

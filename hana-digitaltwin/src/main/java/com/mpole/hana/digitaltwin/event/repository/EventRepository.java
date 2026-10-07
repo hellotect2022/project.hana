@@ -5,7 +5,6 @@ import com.mpole.hana.digitaltwin.event.entity.Event;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,31 +14,10 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 이벤트 정본 조회. 쓰기(발생/해소)는 event-server(R2DBC)가 담당하고,
- * digitaltwin 은 조회와 <b>확인(ack)</b> 만 수행한다.
+ * 이벤트 정본 조회 전용. 쓰기(발생/해소/재활성/확인)는 전부 event-server(R2DBC)가 담당한다.
+ * (2026-10-06: 원시 로그 {@code findByOptionalFilters} 와 REST 확인 {@code ack} 삭제 — 웹소켓 ACK 로 단일화)
  */
 public interface EventRepository extends JpaRepository<Event, UUID> {
-
-    /**
-     * 기간(occurredAt) / level / deviceId / 활성여부 선택 필터 조회.
-     * 각 파라미터는 null 이면 조건에서 제외한다. 정렬은 Pageable(예: occurredAt desc).
-     */
-    @Query("""
-            SELECT e FROM Event e
-            WHERE (CAST(:level AS string) IS NULL OR e.level = :level)
-              AND (CAST(:deviceId AS long) IS NULL OR e.deviceId = :deviceId)
-              AND (CAST(:active AS boolean) IS NULL OR e.active = :active)
-              AND (CAST(:from AS timestamp) IS NULL OR e.occurredAt >= :from)
-              AND (CAST(:to AS timestamp) IS NULL OR e.occurredAt <= :to)
-            """)
-    Page<Event> findByOptionalFilters(
-            @Param("level") String level,
-            @Param("deviceId") Long deviceId,
-            @Param("active") Boolean active,
-            @Param("from") OffsetDateTime from,
-            @Param("to") OffsetDateTime to,
-            Pageable pageable
-    );
 
     /**
      * <b>알람 이력 화면 전용 조회</b> — 명칭(장비명)·위치(층)·알람명·완료여부·발생일시.
@@ -53,15 +31,16 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
      * (2026-08-24 JPQL IS NULL 캐스트 수정 보고서 참고).</p>
      *
      * @param categoryIds 소분류 id 목록. null 이면 전체(빈 목록을 넘기지 말 것 — 결과가 0건이 된다)
-     * @param completed   true=조치완료(ackedAt 존재), false=미조치, null=전체
+     * @param completed   true=완료(ackedAt 존재 — 관제자 확인), false=미완료(미확인), null=전체.
+     *                    2026-10-02 기획 확정: 알람을 닫는 유일한 행위가 확인. 클라이언트 기동 복구가 completed=false 를 쓴다.
      */
     @Query("""
             SELECT new com.mpole.hana.digitaltwin.event.dto.AlarmHistoryRow(
-                       e.eventId, e.ruleId, e.ruleName, e.level,
+                       e.eventId, e.ruleId, e.ruleName, e.eventCode, e.level,
                        e.deviceId, d.deviceName, e.deviceKey,
                        f.floorName, z.zoneName,
                        c.categoryId, c.categoryName,
-                       e.occurredAt, e.ackedAt, e.active)
+                       e.occurredAt, e.clearedAt, e.ackedAt, e.occurrenceCount)
             FROM Event e
             LEFT JOIN Device d ON d.deviceId = e.deviceId
             LEFT JOIN DeviceCategory c ON c.categoryId = d.category.categoryId
@@ -76,6 +55,10 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
               AND (CAST(:completed AS boolean) IS NULL
                    OR (:completed = TRUE  AND e.ackedAt IS NOT NULL)
                    OR (:completed = FALSE AND e.ackedAt IS NULL))
+              AND (CAST(:qLike AS string) IS NULL
+                   OR lower(e.ruleName)   LIKE :qLike
+                   OR lower(d.deviceName) LIKE :qLike
+                   OR lower(e.deviceKey)  LIKE :qLike)
               AND (CAST(:from AS timestamp) IS NULL OR e.occurredAt >= :from)
               AND (CAST(:to   AS timestamp) IS NULL OR e.occurredAt <= :to)
             """)
@@ -86,9 +69,48 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
             @Param("floorId") Long floorId,
             @Param("categoryIds") Collection<Long> categoryIds,
             @Param("completed") Boolean completed,
+            @Param("qLike") String qLike,
             @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to,
             Pageable pageable
+    );
+
+    /**
+     * 이력 화면 상단 집계 — 같은 필터로 전체/완료(확인) 건수. (미완료 = 전체 − 완료)
+     * <p>{@code searchAlarmHistory} 와 조건이 반드시 같아야 표와 숫자가 맞는다. 2026-10-01 추가, 10-02 ackedAt 기준.</p>
+     *
+     * @return {@code [total(Long), completed(Long)]}
+     */
+    @Query("""
+            SELECT count(e),
+                   COALESCE(SUM(CASE WHEN e.ackedAt IS NOT NULL THEN 1 ELSE 0 END), 0)
+            FROM Event e
+            LEFT JOIN Device d ON d.deviceId = e.deviceId
+            LEFT JOIN DeviceCategory c ON c.categoryId = d.category.categoryId
+            LEFT JOIN DevicePlacement p ON p.device.deviceId = d.deviceId
+            LEFT JOIN UnityLocZone z ON z.zoneId = p.unityZone.zoneId
+            LEFT JOIN UnityLocFloor f ON f.floorId = z.floor.floorId
+            WHERE (CAST(:level AS string) IS NULL OR e.level = :level)
+              AND (CAST(:ruleId AS long) IS NULL OR e.ruleId = :ruleId)
+              AND (CAST(:deviceId AS long) IS NULL OR e.deviceId = :deviceId)
+              AND (CAST(:floorId AS long) IS NULL OR f.floorId = :floorId)
+              AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
+              AND (CAST(:qLike AS string) IS NULL
+                   OR lower(e.ruleName)   LIKE :qLike
+                   OR lower(d.deviceName) LIKE :qLike
+                   OR lower(e.deviceKey)  LIKE :qLike)
+              AND (CAST(:from AS timestamp) IS NULL OR e.occurredAt >= :from)
+              AND (CAST(:to   AS timestamp) IS NULL OR e.occurredAt <= :to)
+            """)
+    Object[] countAlarmHistory(
+            @Param("level") String level,
+            @Param("ruleId") Long ruleId,
+            @Param("deviceId") Long deviceId,
+            @Param("floorId") Long floorId,
+            @Param("categoryIds") Collection<Long> categoryIds,
+            @Param("qLike") String qLike,
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to
     );
 
     /**
@@ -104,24 +126,6 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
             """)
     List<Object[]> findDistinctRules(@Param("from") OffsetDateTime from);
 
-    /** 현재 활성 이벤트 전체 — "지금 떠 있는 알람" 목록. Active 축 도입으로 비로소 가능해진 조회. */
-    List<Event> findByActiveTrueOrderByOccurredAtDesc();
-
-    /** 미확인(active 무관) — 놓친 알람 확인용. */
-    List<Event> findByAckedAtIsNullOrderByOccurredAtDesc();
-
-    /**
-     * 확인(ack) 처리 — 이미 확인된 건은 갱신하지 않는다(최초 확인자·시각 보존).
-     *
-     * @return 갱신된 행 수(0 이면 이미 확인됨 또는 미존재)
-     */
-    @Modifying
-    @Query("""
-            UPDATE Event e
-               SET e.ackedAt = :ackedAt, e.ackedBy = :ackedBy, e.updatedAt = :ackedAt
-             WHERE e.eventId = :eventId AND e.ackedAt IS NULL
-            """)
-    int ack(@Param("eventId") UUID eventId,
-            @Param("ackedBy") Long ackedBy,
-            @Param("ackedAt") OffsetDateTime ackedAt);
+    /** 현재 활성(미해소, clearedAt 없음) 이벤트 전체 — "지금 떠 있는 알람" 목록. {@code GET /api/event/active}. */
+    List<Event> findByClearedAtIsNullOrderByOccurredAtDesc();
 }

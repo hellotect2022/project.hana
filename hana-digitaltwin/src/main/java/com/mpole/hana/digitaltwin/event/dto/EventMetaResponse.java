@@ -1,10 +1,8 @@
 package com.mpole.hana.digitaltwin.event.dto;
 
-import com.mpole.hana.common.constant.ActionStatus;
 import com.mpole.hana.common.constant.NotificationChannel;
 import com.mpole.hana.common.constant.SuppressMode;
 import com.mpole.hana.common.dto.CctvSource;
-import com.mpole.hana.digitaltwin.event.entity.RuleConditionKind;
 import com.mpole.hana.digitaltwin.event.entity.EventLevel;
 import com.mpole.hana.digitaltwin.event.entity.RuleOperator;
 import com.mpole.hana.digitaltwin.event.entity.RuleScope;
@@ -32,11 +30,10 @@ public record EventMetaResponse(
         Map<String, String> scope,
         Map<String, String> level,
         Map<String, String> operator,
-        Map<String, String> conditionKind,
         Map<String, String> effect,
         Map<String, String> cctvSource,
         Map<String, ChannelMeta> notificationChannel,
-        Map<String, String> actionStatus,
+        // actionStatus 는 2026-10-02 삭제 — tbl_event_action 폐기
         Map<String, String> eventStatus,
         Map<String, String> suppressMode
 ) {
@@ -51,8 +48,6 @@ public record EventMetaResponse(
         Map<String, String> operator = new LinkedHashMap<>();
         for (RuleOperator v : RuleOperator.values()) operator.put(v.name(), v.getSymbol());
 
-        Map<String, String> conditionKind = new LinkedHashMap<>();
-        for (RuleConditionKind v : RuleConditionKind.values()) conditionKind.put(v.name(), v.getDescription());
 
         Map<String, String> effect = new LinkedHashMap<>();
         for (EventEffect v : EventEffect.values()) effect.put(v.name(), v.getDescription());
@@ -60,14 +55,12 @@ public record EventMetaResponse(
         Map<String, String> cctvSource = new LinkedHashMap<>();
         for (CctvSource v : CctvSource.values()) cctvSource.put(v.name(), v.getDescription());
 
-        // 이벤트 1건에서 발행되는 채널(tbl_event_action.channel)과 그 진행 상태.
+        // 규칙 레벨 outputs 에서 켤 수 있는 출력 채널.
         // 다른 enum 과 달리 값이 셋이다 — 화면이 제목·부연·준비중 배지를 다 이 메타로 그린다.
         Map<String, ChannelMeta> notificationChannel = new LinkedHashMap<>();
         for (NotificationChannel v : NotificationChannel.values())
             notificationChannel.put(v.name(), new ChannelMeta(v.getLabel(), v.getDescription(), v.isReady()));
 
-        Map<String, String> actionStatus = new LinkedHashMap<>();
-        for (ActionStatus v : ActionStatus.values()) actionStatus.put(v.name(), v.getDescription());
 
         // active/acked 두 축의 조합 파생값 — 화면 배지 라벨을 이 메타로 구동한다.
         Map<String, String> eventStatus = new LinkedHashMap<>();
@@ -82,11 +75,9 @@ public record EventMetaResponse(
                 Collections.unmodifiableMap(scope),
                 Collections.unmodifiableMap(level),
                 Collections.unmodifiableMap(operator),
-                Collections.unmodifiableMap(conditionKind),
                 Collections.unmodifiableMap(effect),
                 Collections.unmodifiableMap(cctvSource),
                 Collections.unmodifiableMap(notificationChannel),
-                Collections.unmodifiableMap(actionStatus),
                 Collections.unmodifiableMap(eventStatus),
                 Collections.unmodifiableMap(suppressMode)
         );
