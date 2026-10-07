@@ -65,7 +65,8 @@ public class EventHistoryService {
                     .bind("eventId",event.eventId())
                     .bind("deviceId",event.data().deviceId())
                     .bind("eventType",event.eventType())
-                    .bind("isProcessed",event.isProcessed())
+                    // 봉투의 isProcessed 는 2026-10-01 삭제(항상 false 였음). 컬럼은 남아 있어 상수로 채운다.
+                    .bind("isProcessed", false)
                     .bind("data",jsonStr)
                     .bind("createdAt",event.data().timestamp())
                     .then()

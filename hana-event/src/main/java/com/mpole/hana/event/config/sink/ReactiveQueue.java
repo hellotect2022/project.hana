@@ -11,12 +11,19 @@ import java.util.List;
 @Component
 public class ReactiveQueue {
     // 1. 센서/디바이스 원본 데이터 스트림 싱크
+    //    구독자(CurrentValue/ValueHistory/EventEvaluation)가 기동 시 붙어 영원히 안 떨어지므로 autoCancel 기본값이어도 안전.
+    //    (autoCancel=true 는 "마지막 구독자가 떠나면 sink 종료" — 아래 2번이 그걸로 죽었다)
     private final Sinks.Many<List<DeviceBundle>> deviceRawSink =
-            Sinks.many().multicast().onBackpressureBuffer(20000);
+            Sinks.many().multicast().onBackpressureBuffer(20000, false);
 
-    // 2. 이벤트 체크 통과 후 히스토리 DB 저장용 스트림 싱크
+    // 2. 웹소켓 발행용 싱크 (이벤트 발생/해소 봉투)
+    //    ★ 2026-10-01 버그 수정: multicast().onBackpressureBuffer(n) 은 autoCancel=true 라서
+    //      마지막 웹소켓 세션이 끊기는 순간 sink 가 종료됐다. 이후 emit 은 전부 FAIL_CANCELLED 로 조용히 버려지고,
+    //      새로 접속한 세션은 영원히 아무것도 못 받았다(테스트 서버 15:54 disconnect 뒤 증상).
+    //      directBestEffort = 지금 붙어 있는 구독자에게만 전달, 없으면 버림, 구독자가 오가도 종료되지 않음.
+    //      웹소켓은 "지금 보고 있는 화면" 용이고 정본은 tbl_event 라 버려져도 손실이 아니다.
     private final Sinks.Many<EventHistoryDto> eventHistorySink =
-            Sinks.many().multicast().onBackpressureBuffer(20000);
+            Sinks.many().multicast().directBestEffort();
 
 
     /* ========================================================

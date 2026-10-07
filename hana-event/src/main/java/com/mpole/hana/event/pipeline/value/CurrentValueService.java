@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.event.config.sink.ReactiveQueue;
+import io.r2dbc.spi.Result;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -29,11 +31,13 @@ public class CurrentValueService {
     public void startSnapshotPipeline() {
         reactiveQueue.getDeviceRawFlux()
                 .publishOn(Schedulers.newParallel("snapshot-thread"))
-                .flatMap(bundles->{
+                .concatMap(bundles->{
                     //log.info("snapshot 용으로 수신하는 flux 데이타 {}",bundles.size());
-                    return upsertBulk(bundles);
+                    return upsertBulk(bundles)
+                            .doOnError(e -> log.error("[CurrentValue] 배치 스킵: {}", e.getMessage()))
+                            .onErrorResume(e->Mono.empty());
                 })
-                .subscribe()
+                //.subscribe(null, e -> log.error("[CurrentValue] 스트림 치명적 종료", e))
         ;
     }
 
@@ -83,9 +87,19 @@ public class CurrentValueService {
             """, valuesClause);
 
         var time = System.currentTimeMillis();
-        return postgresDatabaseClient.sql(sql)
-                .then()
-                .doOnSuccess(a->log.info("db insert 하는데 걸린시간 ㅎㅎ ㅜㅜ {}ms",System.currentTimeMillis()- time))
-                .doOnError(e -> log.error("Bulk Upsert 실행 중 DB 에러: {}", e.getMessage()));
+
+        //sql 문자열이 bind 되어서 넘어가는개 아니라 문자열로 만들어서 넣기 때문에 매번 대량의 sql 문 객체가 캐싱되어서 oom 이발생함
+        // 근본적인건 bind 구조로 변경을 하는것이 최고이나 임시로 캐싱이 안되고 매번 13.7mb 사이즈의 query 문을 만들어서 실행하도록 설정도 가능하다ㅏ.
+        return postgresDatabaseClient.inConnection(conn->
+            Flux.from(conn.createStatement(sql).execute()).flatMap(Result::getRowsUpdated)
+                    .then()
+                    .doOnSuccess(a->log.info("db insert 하는데 걸린시간 ㅎㅎ ㅜㅜ {}ms",System.currentTimeMillis()- time))
+        )
+
+//        return postgresDatabaseClient.sql(sql)
+//                .then()
+//                .doOnSuccess(a->log.info("db insert 하는데 걸린시간 ㅎㅎ ㅜㅜ {}ms",System.currentTimeMillis()- time))
+                //.doOnError(e -> log.error("Bulk Upsert 실행 중 DB 에러: {}", e.getMessage()))
+                ;
     }
 }

@@ -25,10 +25,14 @@ public class WebsocketBroadcastService {
 
         var result = reactiveQueue.emitEventHistory(eventHistoryDto);
 
-        if (result.isFailure()) {
-            // 접속자가 없거나, 순간적으로 전송 불가한 경우
-            // Kafka/DB 처리에는 영향 주면 안 됨
-            log.debug("WebSocket publish skipped. result={}", result);
+        // EmitResult 가 sink 상태를 그대로 말해 준다. 어느 경우든 Kafka/DB 처리에는 영향 주면 안 된다.
+        switch (result) {
+            case OK -> { }
+            // 지금 화면을 보는 세션이 없을 뿐 — directBestEffort 의 정상 동작. 정본은 tbl_event 에 있다.
+            case FAIL_ZERO_SUBSCRIBER -> log.debug("WebSocket publish skipped(구독자 없음). eventId={}", eventHistoryDto.eventId());
+            // sink 가 종료된 상태. 이 뒤로는 어떤 세션도 영원히 못 받는다 — 2026-10-01 autoCancel 버그가 이 모양이었다.
+            case FAIL_CANCELLED, FAIL_TERMINATED -> log.error("[WebSocket] sink 종료 상태 — 이후 모든 이벤트가 웹소켓으로 안 나간다. result={}, eventId={}", result, eventHistoryDto.eventId());
+            default -> log.warn("WebSocket publish failed. result={}, eventId={}", result, eventHistoryDto.eventId());
         }
 
         return Mono.empty();
