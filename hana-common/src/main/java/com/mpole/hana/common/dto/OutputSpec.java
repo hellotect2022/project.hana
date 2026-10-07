@@ -17,7 +17,7 @@ import java.util.List;
  * 정본({@code tbl_event.outputs})에 스냅샷으로 박제된다. 이후 정책이 바뀌어도 과거 이벤트의
  * 의미는 변하지 않는다.</p>
  *
- * <p>켜진 채널마다 {@code tbl_event_action} 행이 1건 생성되어 채널별로 독립 상태를 갖는다.</p>
+ * <p>발생 시 {@code tbl_event.outputs} 로 스냅샷되어 클라이언트 표출 근거가 된다(채널별 상태 행은 2026-10-02 폐기).</p>
  *
  * <p><b>popup 키</b> — 과거 {@code notify} 였으나 {@link NotificationChannel#POPUP} 과 이름을 맞췄다.
  * 기존 저장 데이터 호환을 위해 {@code @JsonAlias("notify")} 로 옛 키도 읽는다.</p>
@@ -95,17 +95,16 @@ public record OutputSpec(
     }
 
     /**
-     * 켜진 채널 목록. 이벤트 발생 시 이 목록만큼 {@code tbl_event_action} 행이 생성된다.
-     * 비어 있으면 "액션 없는 event"(표시 전용)이며 그것도 정상이다.
+     * 켜진 채널 목록(로그·표시용). 비어 있으면 "액션 없는 event"(표시 전용)이며 그것도 정상이다.
      */
     public List<NotificationChannel> enabledChannels() {
         List<NotificationChannel> out = new ArrayList<>();
         if (popupEnabled()) out.add(NotificationChannel.POPUP);
         if (sopEnabled()) out.add(NotificationChannel.SOP);
-        if (cctvEnabled()) out.add(NotificationChannel.CCTV);
-        if (smsEnabled()) out.add(NotificationChannel.SMS);
-        if (emailEnabled()) out.add(NotificationChannel.EMAIL);
-        if (deviceControlEnabled()) out.add(NotificationChannel.DEVICE_CONTROL);
+        //if (cctvEnabled()) out.add(NotificationChannel.CCTV);
+        //if (smsEnabled()) out.add(NotificationChannel.SMS);
+        //if (emailEnabled()) out.add(NotificationChannel.EMAIL);
+        //if (deviceControlEnabled()) out.add(NotificationChannel.DEVICE_CONTROL);
         return out;
     }
 
@@ -114,7 +113,7 @@ public record OutputSpec(
         List<String> out = new ArrayList<>();
         if (popupEnabled()) out.add(NotificationChannel.POPUP.name());
         if (sopEnabled()) out.add(NotificationChannel.SOP.name());
-        if (cctvEnabled()) out.add(NotificationChannel.CCTV.name());
+        //if (cctvEnabled()) out.add(NotificationChannel.CCTV.name());
         return out;
     }
 }
