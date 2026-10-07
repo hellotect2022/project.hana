@@ -1,4 +1,4 @@
-package com.mpole.hana.gateway.ingestion.dbview.view01.snapshot;
+package com.mpole.hana.gateway.ingestion.dbview.view01;
 
 import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.common.constant.PointType;
@@ -54,6 +54,7 @@ public final class PointSlot {
         this.unit = unit;
         this.pointType = pointType;
         this.dataSource = dataSource;
+        this.updateDatetime = OffsetDateTime.now();
     }
 
     /**
@@ -66,15 +67,13 @@ public final class PointSlot {
      * @return 값이 실제로 바뀌었으면 true (= 이 장비를 발행 대상으로 표시)
      */
     public boolean applyIfChanged(String newValueRaw, String newAlarmYn, OffsetDateTime newUpdateDatetime) {
-        //boolean changed = !equalsNullable(this.valueRaw, newValueRaw) || !equalsNullable(this.alarmYn, newAlarmYn);
-        boolean changed = true;
-        // 시각은 변경 판정에서 제외하되 값은 항상 최신으로 갱신한다(이력/표시용).
-        this.valueRaw = newValueRaw;
-        this.alarmYn = newAlarmYn;
-        if (newUpdateDatetime != null) {
+        if (newUpdateDatetime != null && this.updateDatetime.isBefore(newUpdateDatetime)) {
             this.updateDatetime = newUpdateDatetime;
+            this.valueRaw = newValueRaw;
+            this.alarmYn = newAlarmYn;
+            return true;
         }
-        return changed;
+        return false;
     }
 
     /** 아직 뷰에서 값을 한 번도 못 받은 칸인지. 정합성 진단용. */

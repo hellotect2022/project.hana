@@ -1,4 +1,4 @@
-package com.mpole.hana.gateway.ingestion.dbview.view01.snapshot;
+package com.mpole.hana.gateway.ingestion.dbview.view01;
 
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.common.dto.XnPointData;

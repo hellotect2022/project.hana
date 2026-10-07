@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p><b>왜 매 사이클 풀리드인가</b> — 뷰의 {@code update_datetime} 은 "뷰 행이 갱신된 시각"이 아니라
  * 각 물리 장비(소스)의 자기 시각이라 전체로 보면 단조증가하지 않는다. 워터마크 증분쿼리
  * ({@code WHERE update_datetime > :lastTime})는 시계가 뒤처진 포인트를 상시 누락시키므로
- * 읽기는 풀리드로 유지하고, 하류 부하는 {@link View01ChangeFilter}(앱 레벨 변경감지)로 줄인다.</p>
+ * 읽기는 풀리드로 유지하고, 하류 부하는 {@link DeviceSnapshotStore}(값이 바뀐 장비만 dirty 표시)로 줄인다.</p>
  */
 @Service
 @Slf4j
@@ -55,7 +55,7 @@ public class View01ReadService {
                 *,
                 CASE
                     -- 💡 숫자로 변환이 가능한 경우 ➡️ 소수점 한 자리 반올림 후 문자열로 변환
-                    WHEN TRY_CAST(value AS NUMERIC(18, 4)) IS NOT NULL\s
+                    WHEN TRY_CAST(value AS NUMERIC(18, 4)) IS NOT NULL
                     THEN FORMAT(ROUND(CAST(value AS NUMERIC(18, 4)), 1), '0.0')
                    
                     -- 💡 NULL이거나 진짜 문자열인 경우 ➡️ 원본 그대로 출력 (NULL이면 빈값 처리 가능)
@@ -86,7 +86,6 @@ public class View01ReadService {
                                     .build();
 
                 }).all()
-                //.doOnNext(data -> count.incrementAndGet()) // 메모리에 쌓지 않고 지나갈 때 숫자만 +1
                 //.doOnComplete(() -> log.info("조회 완료! 총 개수: {} 개", count.getAndSet(0)))
                 //.doOnComplete(() -> log.info("0-2.SiPointData 로 변환 시간 : {}ms", System.currentTimeMillis() - collectTime.get()))
                 .doOnError(e -> log.error("DB 조회 중 에러 발생: ", e));

@@ -1,13 +1,11 @@
-package com.mpole.hana.gateway.ingestion.dbview.view01.snapshot;
+package com.mpole.hana.gateway.ingestion.dbview.view01;
 
 import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.common.constant.PointType;
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.common.dto.XnPointData;
-import com.mpole.hana.gateway.ingestion.dbview.view01.View01BundleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -24,8 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <b>장비 스냅샷 보관소</b> — "장비별 포인트 골격"을 메모리에 들고, 뷰 값을 그 칸에 적용한다.
  *
  * <h3>왜 이 구조인가</h3>
- * 기존 경로는 "뷰에서 온 행"이 주인공이라 매 사이클 팬아웃 → groupingBy → 정렬로 번들을 새로 만든다.
- * 그 결과 (a) 델타만 담으면 하류 통짜 REPLACE 로 안 바뀐 포인트가 소실되고,
+ * 행 중심 방식("뷰에서 온 행"이 주인공, 매 사이클 팬아웃 → groupingBy → 정렬로 번들을 새로 만드는 방식)은
+ * (a) 델타만 담으면 하류 통짜 REPLACE 로 안 바뀐 포인트가 소실되고,
  * (b) 전량을 담으면 매 사이클 30만 행을 재가공해야 한다.
  * 여기서는 골격을 한 번 만들어 두고 <b>값 칸만 갱신</b>하므로 둘 다 피한다 —
  * 판별은 델타(바뀐 장비만), 발행은 전체(그 장비의 모든 포인트).
@@ -42,12 +40,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * 이월하지 않으면 리프레시마다 모든 값이 null 로 초기화된다.
  * 새 인덱스는 통째로 만들어 <b>volatile 참조를 한 번에 교체</b>한다(부분 갱신 중 읽기 불일치 방지).
  *
- * <p>기존 {@code InitDevicePointDataService} 는 건드리지 않는다 — 이 클래스는 별도 경로로 추가되며
- * {@code hdt.dbview.view01.snapshot.enabled=true} 일 때만 기동한다.</p>
+ * <p>골격 적재·리로드는 {@code View01PollingScheduler} 가 구동한다({@code hdt.dbview.view01.enabled=true}).</p>
  */
 @Service
 @Slf4j
-@ConditionalOnProperty(prefix = "hdt.dbview.view01.snapshot", name = "enabled", havingValue = "true")
 public class DeviceSnapshotStore {
 
     /** point_key 에서 device_key 를 유도할 때 자를 언더스코어 개수(기존 번들 로직과 동일 규칙). */
@@ -82,7 +78,7 @@ public class DeviceSnapshotStore {
 
         return loadPointRows()
                 .doOnNext(rows -> rebuildIndexes(rows, previousByPointId))
-                .doOnSuccess(rows -> log.info("[Snapshot] 골격 로드 완료 — 장비 {}대, 포인트 {}개, 신호키 {}개",
+                .doOnSuccess(rows -> log.info("[View01] 골격 로드 완료 — 장비 {}대, 포인트 {}개, 신호키 {}개",
                         deviceIndex.size(),
                         deviceIndex.values().stream().mapToInt(d -> d.slots().size()).sum(),
                         signalIndex.size()))
@@ -158,8 +154,14 @@ public class DeviceSnapshotStore {
         }
 
         Map<Long, DeviceSnapshot> newDeviceIndex = new HashMap<>();
-        slotsByDevice.forEach((deviceId, slots) -> newDeviceIndex.put(deviceId,
-                new DeviceSnapshot(deviceId, deriveDeviceKey(slots), List.copyOf(slots))));
+        // device_key 는 point_key 에서 되돌린다 — 규칙은 deriveDeviceKey 참고.
+        slotsByDevice.forEach((deviceId, slots) -> {
+            String deviceKey = slots.stream()
+                    .map(s -> deriveDeviceKey(s.pointKey(), s.tagName()))
+                    .filter(k -> k != null && !k.isBlank())
+                    .findFirst().orElse(null);
+            newDeviceIndex.put(deviceId, new DeviceSnapshot(deviceId, deviceKey, List.copyOf(slots)));
+        });
 
         // 참조 교체(원자적 publish)
         this.signalIndex = Map.copyOf(newSignalIndex);
@@ -227,7 +229,7 @@ public class DeviceSnapshotStore {
             }
         }
         if (skipped > 0) {
-            log.info("[Snapshot] 전량 발행 제외 {}대 — 뷰 신호가 없는 장비(data_source 가 이 파이프라인이 아님)", skipped);
+            log.info("[View01] 전량 발행 제외 {}대 — 뷰 신호가 없는 장비(data_source 가 이 파이프라인이 아님)", skipped);
         }
     }
 
@@ -255,47 +257,45 @@ public class DeviceSnapshotStore {
             return PointType.valueOf(raw.trim());
         } catch (IllegalArgumentException e) {
             // 알 수 없는 타입 한 건 때문에 골격 전체 로드가 실패하면 안 된다.
-            log.warn("[Snapshot] 알 수 없는 point_type '{}' — null 로 처리", raw);
+            log.warn("[View01] 알 수 없는 point_type '{}' — null 로 처리", raw);
             return null;
         }
     }
 
     /**
-     * {@code point_key} 에서 {@code device_key} 를 되돌린다(번들 로직과 동일 규칙).
-     * <p>자세한 근거는 {@link View01BundleService#deriveDeviceKey(String, String)} 참고.</p>
+     * {@code point_key} 에서 {@code device_key} 를 되돌린다.
+     *
+     * <p>{@code point_key} 는 항상 <b>{@code {device_key}_{tag_name}}</b> 로 만들어지므로,
+     * <b>뒤에서 태그명 길이 + 1 만큼</b> 떼면 device_key 가 정확히 남는다.</p>
+     *
+     * <pre>
+     *   ELEC_EE_MRS_F011_M165_pos   tag=pos   →  ELEC_EE_MRS_F011_M165
+     *   HSE_CLG_CT_CT-2_temp        tag=temp  →  HSE_CLG_CT_CT-2
+     * </pre>
+     *
+     * <p><b>앞에서 세면 안 된다.</b> 예전 구현은 앞쪽 언더스코어 4개까지를 잘랐는데, 그건
+     * "대_중_소_이름" 이 정확히 4토막이라는 가정이다. 실제로는 장비명에 {@code _} 가 들어가고
+     * (전체 장비의 21%) 카테고리 코드에도 들어간다({@code ELV_GR}, {@code MRS_CONTROL}).
+     * 그래서 {@code ELEC_EE_MRS_F011_M165} 가 {@code ELEC_EE_MRS_F011} 로 잘려
+     * <b>서로 다른 장비가 같은 key 를 갖는</b> 상태가 되었다.</p>
+     *
+     * <p>태그명은 뒤쪽에 정확히 한 번만 붙으므로 이 방식은 {@code _} 개수와 무관하게 안전하다.</p>
+     *
+     * @return 유도한 device_key. 형식이 어긋나면 {@code point_key} 를 그대로 돌려준다
+     *         (잘못 자르느니 원본을 두는 편이 추적에 낫다)
      */
-    private static String deriveDeviceKey(List<PointSlot> slots) {
-        for (PointSlot slot : slots) {
-            String derived = View01BundleService.deriveDeviceKey(slot.pointKey(), slot.tagName());
-            if (derived != null && !derived.isBlank()) {
-                return derived;
-            }
+    public static String deriveDeviceKey(String pointKey, String tagName) {
+        if (pointKey == null || pointKey.isEmpty() || tagName == null || tagName.isEmpty()) {
+            return pointKey;
         }
-        return null;
+        String suffix = "_" + tagName;
+        if (!pointKey.endsWith(suffix) || pointKey.length() == suffix.length()) {
+            // 규칙에서 벗어난 키 — 자르지 않고 원본 유지
+            log.warn("[View01] point_key 가 '_{}' 로 끝나지 않는다: {}", tagName, pointKey);
+            return pointKey;
+        }
+        return pointKey.substring(0, pointKey.length() - suffix.length());
     }
-
-    // ────────────────────────────────────────────────────────────────
-    // [보존] 앞쪽 언더스코어 N 개까지 자르던 방식 — 잘못된 가정이라 폐기했다.
-    //
-    //  "대_중_소_이름" 이 정확히 4토막이라고 봤는데 실제로는
-    //    · 장비명에 _ 가 들어간다 (전체의 21%, 예: F011_M165)
-    //    · 카테고리 코드에도 들어간다 (ELV_GR, MRS_CONTROL)
-    //  그래서 ELEC_EE_MRS_F011_M165 가 ELEC_EE_MRS_F011 로 잘려
-    //  서로 다른 장비가 같은 device_key 를 갖게 됐다.
-    // ────────────────────────────────────────────────────────────────
-    // static String cutByUnderscore(String value, int underscoreCount) {
-    //     if (value == null || value.isEmpty()) {
-    //         return value;
-    //     }
-    //     int pos = -1;
-    //     for (int i = 0; i < underscoreCount; i++) {
-    //         pos = value.indexOf('_', pos + 1);
-    //         if (pos == -1) {
-    //             return value;
-    //         }
-    //     }
-    //     return value.substring(0, pos);
-    // }
 
     /** tbl_device_point 한 행(로드 전용 내부 타입). */
     private record PointRow(
