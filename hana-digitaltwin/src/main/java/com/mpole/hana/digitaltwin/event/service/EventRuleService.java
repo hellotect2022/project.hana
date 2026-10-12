@@ -34,10 +34,12 @@ public class EventRuleService {
 
     public EventRuleResponse create(EventRuleRequest req) {
         validate(req);
+        boolean simulated = Boolean.TRUE.equals(req.simulated());
 
         EventRule rule = EventRule.builder()
                 .ruleName(req.ruleName())
-                .eventCode(normalizeEventCode(req.eventCode()))
+                .eventCode(normalizeEventCode(req.eventCode(), simulated))
+                .simulated(simulated)
                 .description(req.description())
                 .scope(req.scope())
                 .categoryId(req.categoryId())
@@ -74,8 +76,10 @@ public class EventRuleService {
         validate(req);
 
         EventRule rule = findOrThrow(id);
+        boolean simulated = Boolean.TRUE.equals(req.simulated());
         rule.setRuleName(req.ruleName());
-        rule.setEventCode(normalizeEventCode(req.eventCode()));
+        rule.setEventCode(normalizeEventCode(req.eventCode(), simulated));
+        rule.setSimulated(simulated);
         rule.setDescription(req.description());
         rule.setScope(req.scope());
         rule.setCategoryId(req.categoryId());
@@ -158,14 +162,28 @@ public class EventRuleService {
         return raw == null ? SuppressMode.UNTIL_ACKED : raw;
     }
 
+    /** 모의 시나리오 전용 규칙의 이벤트 코드 접두어. 프론트(eventRuleService.SCENARIO_PREFIX)·모의 API 와 같은 값. */
+    public static final String SCENARIO_PREFIX = "SCENARIO_";
+
     /**
      * 이벤트 코드 정리 — 공백 제거, 대문자. 비어 있으면 null(웹소켓은 "EVENT" 로 나간다).
      * 클라이언트가 문자열로 분기하므로 대소문자·공백 차이로 어긋나지 않게 서버에서 한 번 맞춘다.
+     *
+     * <p>모의 시나리오 전용({@code simulated})이면 코드가 필수이고 {@code SCENARIO_} 접두어를 강제한다(없으면 붙임) —
+     * 실제 알람 코드와 처음부터 다른 코드로 남겨 이력·Unity 분기에서 섞이지 않게 한다(2026-10-07).</p>
      */
-    private static String normalizeEventCode(String raw) {
-        if (raw == null) return null;
-        String v = raw.trim().toUpperCase();
-        return v.isEmpty() ? null : v;
+    private static String normalizeEventCode(String raw, boolean simulated) {
+        String v = raw == null ? "" : raw.trim().toUpperCase();
+        if (v.isEmpty()) {
+            if (simulated) {
+                throw new IllegalArgumentException("모의 시나리오 전용 규칙은 이벤트 코드(eventCode)가 필수입니다. Unity 훈련 메뉴에 이 코드로 표시됩니다.");
+            }
+            return null;
+        }
+        if (simulated && !v.startsWith(SCENARIO_PREFIX)) {
+            v = SCENARIO_PREFIX + v;
+        }
+        return v;
     }
 
     private void validate(EventRuleRequest req) {

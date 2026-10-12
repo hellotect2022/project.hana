@@ -27,6 +27,7 @@ public record EventRuleResponse(
         Double deadband,
         SuppressMode suppressMode,
         Boolean active,
+        boolean simulated,       // 모의 시나리오 전용(SOP 훈련) 규칙 여부. 2026-10-07
         List<EventRuleLevelItem> levels,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
@@ -68,6 +69,7 @@ public record EventRuleResponse(
                 .deadband(p.getDeadband())
                 .suppressMode(p.getSuppressMode())
                 .active(p.getActive())
+                .simulated(p.isSimulated())
                 .levels(levelItems)
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())

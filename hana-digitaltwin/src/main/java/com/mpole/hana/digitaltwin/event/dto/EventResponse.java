@@ -42,7 +42,9 @@ public record EventResponse(
         String clearedValue,
         OffsetDateTime ackedAt,
         Long ackedBy,
-        EventStatus status
+        EventStatus status,
+        boolean simulated,           // 모의 이벤트(SOP 훈련) 여부. 2026-10-07
+        Long simulatedBy
 ) {
     public static EventResponse from(Event h) {
         if (h == null) return null;
@@ -73,6 +75,8 @@ public record EventResponse(
                 .ackedAt(h.getAckedAt())
                 .ackedBy(h.getAckedBy())
                 .status(h.getStatus())
+                .simulated(h.isSimulated())
+                .simulatedBy(h.getSimulatedBy())
                 .build();
     }
 }

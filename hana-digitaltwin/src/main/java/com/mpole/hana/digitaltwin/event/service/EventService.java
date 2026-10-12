@@ -44,6 +44,7 @@ public class EventService {
      * @param categoryId 소분류가 아니어도 된다 — 대·중분류를 넘기면 하위 소분류 전체로 확장한다
      * @param completed  true=완료(확인됨), false=미완료(미확인), null=전체 (판정 기준은 {@code ackedAt}, 2026-10-02 확정)
      * @param q          검색어 — 알람명·장비명·장비키 부분일치(대소문자 무시). 2026-10-01 추가
+     * @param simulated  true=모의(SOP 훈련)만, false=실제만, null=전체. 2026-10-07 추가
      */
     public Page<AlarmHistoryRow> getAlarmHistory(
             String level,
@@ -52,6 +53,7 @@ public class EventService {
             Long floorId,
             Long categoryId,
             Boolean completed,
+            Boolean simulated,
             String q,
             OffsetDateTime from,
             OffsetDateTime to,
@@ -67,7 +69,7 @@ public class EventService {
         }
 
         return eventRepository.searchAlarmHistory(
-                level, ruleId, deviceId, floorId, categoryIds, completed, likeOf(q), from, to, pageable);
+                level, ruleId, deviceId, floorId, categoryIds, completed, simulated, likeOf(q), from, to, pageable);
     }
 
     /** 이력 화면 상단 집계 — {@link #getAlarmHistory} 와 같은 필터로 전체/완료/미완료 건수. */
@@ -77,6 +79,7 @@ public class EventService {
             Long deviceId,
             Long floorId,
             Long categoryId,
+            Boolean simulated,
             String q,
             OffsetDateTime from,
             OffsetDateTime to
@@ -88,7 +91,7 @@ public class EventService {
             return AlarmHistoryStats.of(0, 0);
         }
         Object[] row = eventRepository.countAlarmHistory(
-                level, ruleId, deviceId, floorId, categoryIds, likeOf(q), from, to);
+                level, ruleId, deviceId, floorId, categoryIds, simulated, likeOf(q), from, to);
         // 집계 쿼리는 항상 1행이지만 JPA 가 Object[] 안에 Object[] 를 한 겹 더 싸서 줄 때가 있다.
         Object[] cells = (row.length == 1 && row[0] instanceof Object[] inner) ? inner : row;
         long total = cells[0] == null ? 0 : ((Number) cells[0]).longValue();

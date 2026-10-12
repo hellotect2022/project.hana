@@ -9,7 +9,8 @@ springdoc:
     #url: /docs/openapi3.json
     # 💡 기본 펼침 상태 설정 (none으로 하면 모두 접힌 채로 시작합니다)
     doc-expansion: none
-    path: /swagger-ui/index.html
+    path: /swagger-ui.html   # 👈 /swagger-ui/index.html 대신 이렇게 변경하세요!
+    #path: /swagger-ui/index.html
 
 
 spring:
@@ -73,7 +74,7 @@ spring:
 logging:
   level:
     org.hibernate.SQL: INFO
-    org.hibernate.orm.jdbc.bind: trace
+    org.hibernate.orm.jdbc.bind: INFO
     org.hibernate.tool.schema: INFO
 
 # JWT 설정 (관제 시스템 최적화)

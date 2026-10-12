@@ -130,6 +130,18 @@ public class EventRule extends DateEntity {
     private Boolean active = true;
 
     /**
+     * 모의 시나리오 전용(SOP 훈련) 규칙 — 2026-10-07.
+     * <p>true 면 event 서버가 평가 인덱스에 싣지 않아 실제 값에 절대 걸리지 않는다. Unity 훈련 메뉴(Ctrl+E)가
+     * {@code event_code}(SCENARIO_… 접두어 강제)로 시나리오를 고르고, 모의 API({@code /api/event/simulate})가 이 규칙의
+     * 범위·태그·레벨·outputs(SOP 템플릿)로 {@code tbl_event} 에 {@code simulated=true} 행을 만든다.
+     * 실제 규칙과 완전히 분리된 세계라 화재 모의는 {@code FIRE_DETECT} 규칙과 별개로 {@code SCENARIO_FIRE_DETECT} 규칙을 하나 더 등록한다.</p>
+     */
+    @Column(name = "simulated", nullable = false)
+    @Builder.Default
+    @Comment("모의 시나리오 전용(SOP 훈련) 규칙. true 면 event 서버 평가 인덱스에 싣지 않고, Unity 훈련 메뉴(event_code=SCENARIO_…)와 모의 API 만 쓴다. 2026-10-07")
+    private boolean simulated = false;
+
+    /**
      * 심각도 등급 목록. {@code orphanRemoval=true} 라 규칙 수정 시 전체 교체가 가능하고,
      * DB 쪽에도 {@code ON DELETE CASCADE} 가 걸려 있어 규칙을 지우면 레벨도 함께 사라진다.
      */

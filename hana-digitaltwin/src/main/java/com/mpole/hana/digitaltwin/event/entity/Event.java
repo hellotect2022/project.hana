@@ -216,6 +216,24 @@ public class Event {
     @Comment("[Ack 축] 확인한 사용자 id(tbl_user.user_id 소프트 참조)")
     private Long ackedBy;
 
+    /* ─────────────────────────────────────────────────────────────
+     * 모의 이벤트 (2026-10-07) — Unity 의 SOP 시나리오 훈련.
+     *   digitaltwin REST(/api/event/simulate) 가 직접 INSERT 하는 유일한 경우. 모의 전용 규칙(tbl_event_rule.simulated)의
+     *   레벨·outputs 스냅샷으로 만들고, 확인(ack)도 REST(/simulate/{id}/ack) 로만 받는다(웹소켓 아님, 해소 단계 없음).
+     *   event 서버는 복원·재동기화 쿼리에서 simulated 행을 읽지 않아 활성맵에 오르지 않고, 평가기가 모르므로
+     *   실제 값이 들어와도 꺼지지 않는다. 유니크 인덱스도 분리돼 있어(uk_event_open … AND NOT simulated /
+     *   uk_event_sim_open … AND simulated) 모의와 실제가 서로를 막지 않는다.
+     * ───────────────────────────────────────────────────────────── */
+
+    @Column(name = "simulated", nullable = false)
+    @Builder.Default
+    @Comment("모의 이벤트(SOP 시나리오 훈련) 여부. true 면 digitaltwin REST 가 만든 행이며 event 서버 활성맵·평가 대상이 아니다. 2026-10-07")
+    private boolean simulated = false;
+
+    @Column(name = "simulated_by")
+    @Comment("모의 이벤트를 띄운 사용자 id(tbl_user.user_id 소프트 참조). simulated=false 면 NULL")
+    private Long simulatedBy;
+
     /** 조회 편의용 파생 상태(컬럼 아님) — 두 축의 조합. */
     @Transient
     public EventStatus getStatus() {

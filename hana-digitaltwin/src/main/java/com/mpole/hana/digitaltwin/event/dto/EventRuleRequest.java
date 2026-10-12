@@ -31,6 +31,7 @@ public record EventRuleRequest(
         Double deadband,
         SuppressMode suppressMode,
         Boolean active,
+        Boolean simulated,      // 모의 시나리오 전용(SOP 훈련). null=false. true 면 eventCode 필수 + SCENARIO_ 접두어 강제 (2026-10-07)
         List<EventRuleLevelItem> levels
 ) {
 }

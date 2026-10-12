@@ -48,6 +48,9 @@ public class SecurityConfig {
                         // 이 규칙들이 통째로 무시되고 HQS API 가 다시 무인증으로 열린다.
                         .requestMatchers("/api/v1/hqs/login/external").permitAll()   // 토큰 발급 — 인증 전 호출
                         .requestMatchers("/api/v1/hqs/**").hasAnyRole("ADMIN", "HQS") // HQS 용
+                        // 모의 이벤트(SOP 시나리오 훈련, 2026-10-07) — 켤 때는 아래 주석을 풀고 "/api/**" permitAll 보다 위에 둔다.
+                        // 지금은 다른 /api/** 와 같이 무인증 통과(사용자 결정: 일단 권한 없이 전부 통과, 역할은 ADMIN·UNITY 예정).
+                        // .requestMatchers("/api/event/simulate/**").hasAnyRole("ADMIN", "UNITY")
                         // ──────────────────────────────────────────────────────────
                         .requestMatchers(
                                 "/api/device-system/roles/**",

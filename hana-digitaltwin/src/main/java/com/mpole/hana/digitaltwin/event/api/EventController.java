@@ -49,12 +49,14 @@ public class EventController {
                     · 알람명 = 규칙 이름(ruleName)
                     · **완료 여부 = ackedAt 존재 여부** (관제자 확인. 2026-10-02 기획 확정 — 알람을 닫는 유일한 행위)
                     · 클라이언트 기동 시 `completed=false` 로 미확인 알람을 복구한다. clearedAt(해소)·occurrenceCount(재발 횟수)는 참고값
+                    · 각 행의 `simulated` 가 true 면 모의 이벤트(SOP 훈련, /api/event/simulate 로 발생·확인). `simulated` 필터로 모의만/실제만 (2026-10-07)
                     """,
             parameters = {
                     @Parameter(name = "categoryId", description = "장비 카테고리. 대·중분류를 넘기면 하위 소분류 전체로 확장", example = "12"),
                     @Parameter(name = "floorId", description = "층 ID(위치 필터)", example = "4"),
                     @Parameter(name = "ruleId", description = "알람명(규칙) ID", example = "7"),
                     @Parameter(name = "completed", description = "true=완료(확인됨), false=미완료(미확인), 생략=전체", example = "false"),
+                    @Parameter(name = "simulated", description = "true=모의(SOP 훈련)만, false=실제만, 생략=전체", example = "false"),
                     @Parameter(name = "q", description = "검색어 — 알람명·장비명·장비키 부분일치(대소문자 무시)", example = "청소"),
                     @Parameter(name = "level", description = "심각도(CAUTION/WARNING/CRITICAL)"),
                     @Parameter(name = "deviceId", description = "특정 장비만"),
@@ -70,6 +72,7 @@ public class EventController {
             @RequestParam(required = false) Long floorId,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Boolean completed,
+            @RequestParam(required = false) Boolean simulated,
             @RequestParam(required = false) String q,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
@@ -80,7 +83,7 @@ public class EventController {
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "occurredAt"));
         Page<AlarmHistoryRow> result = eventService.getAlarmHistory(
-                level, ruleId, deviceId, floorId, categoryId, completed, q, from, to, pageable);
+                level, ruleId, deviceId, floorId, categoryId, completed, simulated, q, from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success("알람 이력 조회", result));
     }
 
@@ -92,6 +95,7 @@ public class EventController {
                     @Parameter(name = "categoryId", description = "장비 카테고리(대·중분류는 하위 소분류로 확장)"),
                     @Parameter(name = "floorId", description = "층 ID"),
                     @Parameter(name = "ruleId", description = "알람명(규칙) ID"),
+                    @Parameter(name = "simulated", description = "true=모의(SOP 훈련)만, false=실제만, 생략=전체"),
                     @Parameter(name = "q", description = "검색어 — 알람명·장비명·장비키 부분일치"),
                     @Parameter(name = "level", description = "심각도"),
                     @Parameter(name = "deviceId", description = "특정 장비만"),
@@ -106,6 +110,7 @@ public class EventController {
             @RequestParam(required = false) Long deviceId,
             @RequestParam(required = false) Long floorId,
             @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Boolean simulated,
             @RequestParam(required = false) String q,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
@@ -113,7 +118,7 @@ public class EventController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
     ) {
         AlarmHistoryStats stats = eventService.getAlarmHistoryStats(
-                level, ruleId, deviceId, floorId, categoryId, q, from, to);
+                level, ruleId, deviceId, floorId, categoryId, simulated, q, from, to);
         return ResponseEntity.ok(ApiResponse.success("알람 이력 집계", stats));
     }
 

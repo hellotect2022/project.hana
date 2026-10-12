@@ -20,6 +20,7 @@ import java.util.UUID;
  * @param eventCode       규칙의 이벤트 코드 스냅샷(클라이언트 분기용, 예 WC_CLEAN). 없으면 null
  * @param clearedAt       해소 시각. null 이면 지금도 성립 중(활성)
  * @param occurrenceCount 성립 횟수. 해소·미확인 상태에서 재성립할 때마다 +1 (최초 1)
+ * @param simulated       모의 이벤트(SOP 시나리오 훈련) 여부. 화면 "모의" 배지. 2026-10-07
  * @param completed       화면 "완료 여부" — {@code ackedAt != null}
  * @param categoryName    화면 묶음(제목)용 소분류 카테고리명
  */
@@ -40,6 +41,7 @@ public record AlarmHistoryRow(
         OffsetDateTime clearedAt,
         OffsetDateTime ackedAt,
         int occurrenceCount,
+        boolean simulated,
         boolean completed
 ) {
     /**
@@ -51,9 +53,9 @@ public record AlarmHistoryRow(
                            String floorName, String zoneName,
                            Long categoryId, String categoryName,
                            OffsetDateTime occurredAt, OffsetDateTime clearedAt, OffsetDateTime ackedAt,
-                           int occurrenceCount) {
+                           int occurrenceCount, boolean simulated) {
         this(eventId, ruleId, ruleName, eventCode, level, deviceId, deviceName, deviceKey,
                 floorName, zoneName, categoryId, categoryName,
-                occurredAt, clearedAt, ackedAt, occurrenceCount, ackedAt != null);
+                occurredAt, clearedAt, ackedAt, occurrenceCount, simulated, ackedAt != null);
     }
 }

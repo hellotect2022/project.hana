@@ -37,7 +37,7 @@ public class CurrentValueService {
                             .doOnError(e -> log.error("[CurrentValue] 배치 스킵: {}", e.getMessage()))
                             .onErrorResume(e->Mono.empty());
                 })
-                //.subscribe(null, e -> log.error("[CurrentValue] 스트림 치명적 종료", e))
+                .subscribe(null, e -> log.error("[CurrentValue] 스트림 치명적 종료", e))
         ;
     }
 

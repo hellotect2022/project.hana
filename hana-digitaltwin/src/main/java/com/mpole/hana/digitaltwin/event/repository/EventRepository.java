@@ -5,17 +5,21 @@ import com.mpole.hana.digitaltwin.event.entity.Event;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 이벤트 정본 조회 전용. 쓰기(발생/해소/재활성/확인)는 전부 event-server(R2DBC)가 담당한다.
+ * 이벤트 정본 조회. 실제 이벤트의 쓰기(발생/해소/재활성/확인)는 전부 event-server(R2DBC)가 담당한다.
  * (2026-10-06: 원시 로그 {@code findByOptionalFilters} 와 REST 확인 {@code ack} 삭제 — 웹소켓 ACK 로 단일화)
+ * <p>예외는 <b>모의 이벤트</b>({@code simulated = true}, 2026-10-07)다. SOP 시나리오 훈련용 행은 digitaltwin 이 직접 INSERT·확인한다.
+ * event 서버는 그 행을 읽지 않는다. 아래 "모의 이벤트" 절의 메서드는 전부 {@code simulated = TRUE} 조건이 걸려 실제 행을 건드리지 못한다.</p>
  */
 public interface EventRepository extends JpaRepository<Event, UUID> {
 
@@ -33,6 +37,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
      * @param categoryIds 소분류 id 목록. null 이면 전체(빈 목록을 넘기지 말 것 — 결과가 0건이 된다)
      * @param completed   true=완료(ackedAt 존재 — 관제자 확인), false=미완료(미확인), null=전체.
      *                    2026-10-02 기획 확정: 알람을 닫는 유일한 행위가 확인. 클라이언트 기동 복구가 completed=false 를 쓴다.
+     * @param simulated   true=모의(SOP 훈련)만, false=실제만, null=전체. 2026-10-07
      */
     @Query("""
             SELECT new com.mpole.hana.digitaltwin.event.dto.AlarmHistoryRow(
@@ -40,7 +45,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
                        e.deviceId, d.deviceName, e.deviceKey,
                        f.floorName, z.zoneName,
                        c.categoryId, c.categoryName,
-                       e.occurredAt, e.clearedAt, e.ackedAt, e.occurrenceCount)
+                       e.occurredAt, e.clearedAt, e.ackedAt, e.occurrenceCount, e.simulated)
             FROM Event e
             LEFT JOIN Device d ON d.deviceId = e.deviceId
             LEFT JOIN DeviceCategory c ON c.categoryId = d.category.categoryId
@@ -55,6 +60,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
               AND (CAST(:completed AS boolean) IS NULL
                    OR (:completed = TRUE  AND e.ackedAt IS NOT NULL)
                    OR (:completed = FALSE AND e.ackedAt IS NULL))
+              AND (CAST(:simulated AS boolean) IS NULL OR e.simulated = :simulated)
               AND (CAST(:qLike AS string) IS NULL
                    OR lower(e.ruleName)   LIKE :qLike
                    OR lower(d.deviceName) LIKE :qLike
@@ -69,6 +75,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
             @Param("floorId") Long floorId,
             @Param("categoryIds") Collection<Long> categoryIds,
             @Param("completed") Boolean completed,
+            @Param("simulated") Boolean simulated,
             @Param("qLike") String qLike,
             @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to,
@@ -95,6 +102,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
               AND (CAST(:deviceId AS long) IS NULL OR e.deviceId = :deviceId)
               AND (CAST(:floorId AS long) IS NULL OR f.floorId = :floorId)
               AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
+              AND (CAST(:simulated AS boolean) IS NULL OR e.simulated = :simulated)
               AND (CAST(:qLike AS string) IS NULL
                    OR lower(e.ruleName)   LIKE :qLike
                    OR lower(d.deviceName) LIKE :qLike
@@ -108,10 +116,46 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
             @Param("deviceId") Long deviceId,
             @Param("floorId") Long floorId,
             @Param("categoryIds") Collection<Long> categoryIds,
+            @Param("simulated") Boolean simulated,
             @Param("qLike") String qLike,
             @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to
     );
+
+    /* ───────────────────── 모의 이벤트 (SOP 시나리오 훈련, 2026-10-07) ─────────────────────
+     * digitaltwin 이 tbl_event 에 쓰는 유일한 경로. 전부 simulated = TRUE 행만 다루므로 실제 이벤트(event 서버 소유)는 건드리지 않는다.
+     */
+
+    /** 같은 규칙+장비+포인트의 열린 모의 행(uk_event_sim_open 으로 최대 1건). 같은 장비를 다시 클릭했을 때 기존 id 반환용. */
+    @Query("""
+            SELECT e FROM Event e
+             WHERE e.simulated = TRUE AND e.clearedAt IS NULL
+               AND e.ruleId = :ruleId AND e.deviceId = :deviceId
+               AND ((CAST(:pointId AS long) IS NULL AND e.pointId IS NULL) OR e.pointId = :pointId)
+            """)
+    Optional<Event> findOpenSimulated(@Param("ruleId") Long ruleId,
+                                      @Param("deviceId") Long deviceId,
+                                      @Param("pointId") Long pointId);
+
+    /** 지금 열린 모의 이벤트 전체 — Unity 재접속 복구용. */
+    List<Event> findBySimulatedTrueAndClearedAtIsNullOrderByOccurredAtDesc();
+
+    /**
+     * 모의 이벤트 확인(ack) = 종료. 실제 이벤트와 같은 규칙(acked_at + 미해소면 cleared_at 도 같은 시각). 최초 확인만 남는다.
+     * {@code simulated = TRUE} 조건이 있어 실제 이벤트는 이 경로로 절대 확인되지 않는다(실제는 event 서버 웹소켓 ACK 전용).
+     *
+     * @return 갱신 행 수. 0 이면 이미 확인됐거나 모의 행이 아니거나 없음
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Event e
+               SET e.ackedAt = :ackedAt, e.ackedBy = :ackedBy,
+                   e.clearedAt = COALESCE(e.clearedAt, :ackedAt)
+             WHERE e.eventId = :eventId AND e.simulated = TRUE AND e.ackedAt IS NULL
+            """)
+    int ackSimulated(@Param("eventId") UUID eventId,
+                     @Param("ackedBy") Long ackedBy,
+                     @Param("ackedAt") OffsetDateTime ackedAt);
 
     /**
      * 알람명 드롭다운("데이터 선택")용 — 실제로 발생한 적 있는 (ruleId, ruleName) 만.

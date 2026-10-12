@@ -48,8 +48,10 @@ public class EventRuleReader {
                        tag_name, point_type, operator,
                        sustain_sec, deadband, suppress_mode
                 FROM tbl_event_rule
-                WHERE active = true
+                WHERE active = true AND NOT simulated
                 """;
+        // NOT simulated (2026-10-07): 모의 시나리오 전용 규칙(SOP 훈련, event_code=SCENARIO_…)은 평가 인덱스에 싣지 않는다.
+        // 실제 값에 절대 걸리지 않고, digitaltwin 모의 API 만 그 규칙으로 tbl_event(simulated=true) 행을 만든다.
         return postgresDatabaseClient.sql(sql)
                 .map((row, meta) -> new RuleRow(
                         row.get("rule_id", Long.class),
@@ -79,7 +81,7 @@ public class EventRuleReader {
                        l.icon, l.effect, l.display_order, l.outputs
                 FROM tbl_event_rule_level l
                 JOIN tbl_event_rule r ON r.rule_id = l.rule_id
-                WHERE r.active = true
+                WHERE r.active = true AND NOT r.simulated
                 ORDER BY l.rule_id, l.display_order
                 """;
         return postgresDatabaseClient.sql(sql)
@@ -169,9 +171,12 @@ public class EventRuleReader {
     public Flux<ActiveEventRow> loadActiveEvents() {
         String sql = ACTIVE_ROW_SELECT + """
                  WHERE e.acked_at IS NULL
+                   AND NOT e.simulated
                    AND COALESCE(r.suppress_mode, 'UNTIL_ACKED') <> 'NONE'
                  ORDER BY (e.cleared_at IS NULL) ASC, COALESCE(e.last_occurred_at, e.occurred_at) ASC
                 """;
+        // NOT e.simulated (2026-10-07): 모의 이벤트(digitaltwin REST 가 만든 SOP 훈련 행)는 활성맵에 올리지 않는다.
+        // 평가기가 모르므로 실제 값이 들어와도 모의가 꺼지지 않고, 같은 키의 진짜 이벤트는 별도 행으로 정상 발생한다.
         return postgresDatabaseClient.sql(sql)
                 .map(EventRuleReader::toActiveRow)
                 .all()
@@ -188,6 +193,7 @@ public class EventRuleReader {
                    AND e.device_id = :deviceId
                    AND e.point_id IS NOT DISTINCT FROM :pointId
                    AND e.cleared_at IS NULL
+                   AND NOT e.simulated
                  ORDER BY COALESCE(e.last_occurred_at, e.occurred_at) DESC
                  LIMIT 1
                 """;
