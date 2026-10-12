@@ -1,5 +1,6 @@
 package com.mpole.hana.event.pipeline.event;
 
+import com.mpole.hana.common.constant.ControlTrigger;
 import com.mpole.hana.common.constant.NotificationChannel;
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.common.dto.EventClear;
@@ -44,6 +45,7 @@ public class EventEvaluationPipeline {
     private final ActiveEventStore activeStore;
     private final WebsocketBroadcastService websocketBroadcastService;
     private final EventWriter eventWriter;
+    private final EventControlClient controlClient;
 
     /** 전이마다 활성맵 격자를 INFO 로 찍을지(개발자용, 2026-10-06). 기본 true. */
     @Value("${hdt.event.dump-active-on-change:true}")
@@ -173,6 +175,7 @@ public class EventEvaluationPipeline {
                                         : Mono.empty());
                     }
                     logChannels(ev);
+                    fireControls(ev, stateless);
                     return websocketBroadcastService.publish(EventHistoryDto.occurrence(ev));
                 })
                 .onErrorResume(e -> {
@@ -194,6 +197,21 @@ public class EventEvaluationPipeline {
                         ? websocketBroadcastService.publish(EventHistoryDto.cleared(ev))
                         : Mono.empty())
                 .then();
+    }
+
+    /**
+     * 이벤트 연동 디바이스 제어(2026-10-12) — 정본 INSERT 가 <b>성공한 발생</b>에서만 부른다(재활성·DB 차단 시엔 안 부름 → 이벤트당 1회).
+     * 실행은 digitaltwin 이 하고 여기서는 비동기로 던지기만 한다({@link EventControlClient}).
+     * 사건형(NONE)은 발생과 동시에 자동 완료(acked_at=occurred_at)이므로 확인 후(ON_ACK) 제어도 이 자리에서 이어서 실행한다.
+     */
+    private void fireControls(EventOccurrence ev, boolean stateless) {
+        if (ev.outputs() == null) return;
+        if (ev.outputs().hasControlsFor(ControlTrigger.ON_OCCUR)) {
+            controlClient.fire(ev.eventId(), ControlTrigger.ON_OCCUR);
+        }
+        if (stateless && ev.outputs().hasControlsFor(ControlTrigger.ON_ACK)) {
+            controlClient.fire(ev.eventId(), ControlTrigger.ON_ACK);
+        }
     }
 
     /** 활성맵 격자 로그 — 운영에서 활성 수백 건이면 로그가 커지므로 yml 로 끌 수 있다. */

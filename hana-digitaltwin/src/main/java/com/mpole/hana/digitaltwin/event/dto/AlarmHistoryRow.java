@@ -42,6 +42,7 @@ public record AlarmHistoryRow(
         OffsetDateTime ackedAt,
         int occurrenceCount,
         boolean simulated,
+        boolean sopEnabled,      // SOP 이벤트 여부. 목록 "SOP" 배지용(스냅샷 본문은 상세 GET /api/event/{id} 에서). 2026-10-12
         boolean completed
 ) {
     /**
@@ -53,9 +54,9 @@ public record AlarmHistoryRow(
                            String floorName, String zoneName,
                            Long categoryId, String categoryName,
                            OffsetDateTime occurredAt, OffsetDateTime clearedAt, OffsetDateTime ackedAt,
-                           int occurrenceCount, boolean simulated) {
+                           int occurrenceCount, boolean simulated, boolean sopEnabled) {
         this(eventId, ruleId, ruleName, eventCode, level, deviceId, deviceName, deviceKey,
                 floorName, zoneName, categoryId, categoryName,
-                occurredAt, clearedAt, ackedAt, occurrenceCount, simulated, ackedAt != null);
+                occurredAt, clearedAt, ackedAt, occurrenceCount, simulated, sopEnabled, ackedAt != null);
     }
 }

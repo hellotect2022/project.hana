@@ -53,6 +53,11 @@ hdt:
     rule-refresh-ms: 30000                # 규칙 캐시(EventRuleCache) 리로드 주기 = 규칙 변경의 최대 반영 지연
     ack-sweep-ms: 30000                   # UNTIL_ACKED 억제 해제 확인(ActiveEventStore) 주기
     dump-active-on-change: true           # 발생·해소·재활성·확인마다 활성맵 전체를 격자로 INFO 로그(개발자용). 운영에서 활성 수백 건이면 false
+    # 이벤트 연동 디바이스 제어(2026-10-12) — 발생(ON_OCCUR)·확인(ON_ACK) 시 digitaltwin 내부 API 로 실행을 맡긴다
+    control:
+      enabled: true                       # false 면 제어 호출을 아예 안 보낸다(장비를 움직이면 안 되는 테스트 환경)
+      digitaltwin-base-url: http://localhost:8082   # digitaltwin 서버 주소(같은 서버면 localhost). 운영 배포 시 확인
+      timeout: 15s                        # 응답 대기 상한. 여러 장비를 순차 제어하므로 XN 타임아웃(연결3s+읽기3s)×건수 고려
 
 management:
   server:

@@ -1,5 +1,6 @@
 package com.mpole.hana.event.pipeline.event;
 
+import com.mpole.hana.common.constant.ControlTrigger;
 import com.mpole.hana.event.dto.EventAck;
 import com.mpole.hana.event.dto.EventHistoryDto;
 import com.mpole.hana.event.pipeline.event.dto.ActiveEvent;
@@ -34,25 +35,61 @@ public class EventAckService {
     private final EventWriter eventWriter;
     private final ActiveEventStore activeStore;
     private final WebsocketBroadcastService websocketBroadcastService;
+    private final EventControlClient controlClient;
 
-    /** 확인 처리. 실패·무시는 로그만 남기고 스트림을 끊지 않는다. */
-    public Mono<Void> ack(UUID eventId, Long userId) {
+    /** 확인 결과. 거절({@link #REJECTED_SOP_RESULT_REQUIRED})이면 호출부(웹소켓 핸들러)가 보낸 세션에만 알린다. */
+    public enum AckResult {
+        ACKED,
+        /** 이미 확인된 이벤트 — 조용히 무시(최초 확인자·시각 보존) */
+        ALREADY_ACKED,
+        /** SOP 이벤트인데 sopResult 가 없음 — 확인하지 않음 */
+        REJECTED_SOP_RESULT_REQUIRED,
+        NOT_FOUND,
+        FAILED
+    }
+
+    public static final String REASON_SOP_RESULT_REQUIRED =
+            "SOP 이벤트는 확인 시 sopResult(SOP 클릭 기록)가 필요합니다. SOP 를 끝까지 완료한 뒤 다시 확인하세요.";
+
+    /**
+     * 확인 처리. 실패·무시는 로그만 남기고 스트림을 끊지 않는다.
+     *
+     * @param sopResultJson SOP 클릭 기록 스냅샷(JSON 문자열, 형식 자유, 2026-10-12). SOP 이벤트면 필수 — 없으면 거절.
+     *                      SOP 가 아닌 이벤트면 무시하고 확인만 한다. 판별은 DB(sop_enabled) 로 한다(활성맵 아님).
+     */
+    public Mono<AckResult> ack(UUID eventId, Long userId, String sopResultJson) {
         OffsetDateTime now = OffsetDateTime.now();
-        return eventWriter.ack(eventId, userId, now)
+        return eventWriter.ack(eventId, userId, now, sopResultJson)
                 .flatMap(code -> {
                     ActiveEvent entry = activeStore.applyAck(eventId);
                     log.info("[EventAck] 확인 처리 → 종료. eventId={}, userId={}, 활성맵={}\n{}",
                             eventId, userId, entry == null ? "없음(사건형/이미 종료)" : (entry.awaitingAck() ? "해소·미확인 제거" : "활성 중 제거"),
                             activeStore.dumpTable());
+                    // 확인 후 디바이스 제어(2026-10-12) — 최초 확인 때만 여기 온다(이미 확인된 건은 UPDATE 0행 → switchIfEmpty).
+                    // 이 이벤트에 ON_ACK 제어가 있는지는 digitaltwin 이 outputs 를 보고 판단한다(없으면 아무것도 안 함).
+                    controlClient.fire(eventId, ControlTrigger.ON_ACK);
                     return websocketBroadcastService.publish(
-                            EventHistoryDto.acked(new EventAck(eventId, code.orElse(null), now, userId)));
+                                    EventHistoryDto.acked(new EventAck(eventId, code.orElse(null), now, userId)))
+                            .thenReturn(AckResult.ACKED);
                 })
-                .switchIfEmpty(Mono.fromRunnable(() ->
-                        log.debug("[EventAck] 이미 확인됐거나 없는 이벤트. eventId={}", eventId)))
+                // 0행일 때만 사유 조회 — 정상 확인은 쿼리 한 번으로 끝난다
+                .switchIfEmpty(Mono.defer(() -> eventWriter.ackState(eventId)
+                        .map(st -> {
+                            if (st.acked()) {
+                                log.debug("[EventAck] 이미 확인된 이벤트. eventId={}", eventId);
+                                return AckResult.ALREADY_ACKED;
+                            }
+                            if (st.sopEnabled() && sopResultJson == null) {
+                                log.warn("[EventAck] 확인 거절 — SOP 이벤트인데 sopResult 없음. eventId={}, userId={}", eventId, userId);
+                                return AckResult.REJECTED_SOP_RESULT_REQUIRED;
+                            }
+                            log.warn("[EventAck] 확인 UPDATE 0행(사유 불명, 동시 확인 경합 가능). eventId={}", eventId);
+                            return AckResult.ALREADY_ACKED;
+                        })
+                        .defaultIfEmpty(AckResult.NOT_FOUND)))
                 .onErrorResume(e -> {
                     log.error("[EventAck] 확인 처리 실패. eventId={}: {}", eventId, e.getMessage());
-                    return Mono.empty();
-                })
-                .then();
+                    return Mono.just(AckResult.FAILED);
+                });
     }
 }

@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.event.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.mpole.hana.digitaltwin.event.entity.EventEffect;
 import com.mpole.hana.digitaltwin.event.entity.Event;
 import com.mpole.hana.digitaltwin.event.entity.EventStatus;
@@ -44,7 +45,9 @@ public record EventResponse(
         Long ackedBy,
         EventStatus status,
         boolean simulated,           // 모의 이벤트(SOP 훈련) 여부. 2026-10-07
-        Long simulatedBy
+        Long simulatedBy,
+        boolean sopEnabled,          // SOP 이벤트 여부(발생 시점). true 면 확인 시 sopResult 필수. 2026-10-12
+        JsonNode sopResult           // SOP 완료 클릭 기록 스냅샷(확인 때 저장, 형식 자유). 미확인이면 null
 ) {
     public static EventResponse from(Event h) {
         if (h == null) return null;
@@ -77,6 +80,8 @@ public record EventResponse(
                 .status(h.getStatus())
                 .simulated(h.isSimulated())
                 .simulatedBy(h.getSimulatedBy())
+                .sopEnabled(h.isSopEnabled())
+                .sopResult(h.getSopResult())
                 .build();
     }
 }

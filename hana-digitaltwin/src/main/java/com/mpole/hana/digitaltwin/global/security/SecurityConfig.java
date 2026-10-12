@@ -60,6 +60,7 @@ public class SecurityConfig {
                                 ).authenticated()
                         .requestMatchers(
                                 "/api/**",
+                                "/internal/**",   // 서버 간 내부 API(event 서버 → 이벤트 연동 디바이스 제어, 2026-10-12). 외부 비노출 전제
                                 "/actuator/**",
                                 "/api/auth/login",
                                 "/api/auth/refresh",

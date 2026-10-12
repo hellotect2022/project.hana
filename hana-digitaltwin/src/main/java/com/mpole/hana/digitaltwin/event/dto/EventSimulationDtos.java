@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.event.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.mpole.hana.common.dto.OutputSpec;
 import com.mpole.hana.digitaltwin.event.entity.Event;
 import com.mpole.hana.digitaltwin.event.entity.EventEffect;
@@ -105,6 +106,14 @@ public final class EventSimulationDtos {
                     .alreadyActive(alreadyActive)
                     .build();
         }
+    }
+
+    /**
+     * 확인(ack) 요청(2026-10-12). 본문은 생략 가능.
+     *
+     * @param sopResult SOP 클릭 기록 스냅샷(JSON 이면 무엇이든). SOP 이벤트면 필수 — 없으면 400. SOP 가 아니면 무시
+     */
+    public record AckRequest(JsonNode sopResult) {
     }
 
     /** 확인(ack) 응답. 이미 확인된 건이면 기존 값이 그대로 오고 {@code alreadyAcked=true}. */

@@ -45,7 +45,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
                        e.deviceId, d.deviceName, e.deviceKey,
                        f.floorName, z.zoneName,
                        c.categoryId, c.categoryName,
-                       e.occurredAt, e.clearedAt, e.ackedAt, e.occurrenceCount, e.simulated)
+                       e.occurredAt, e.clearedAt, e.ackedAt, e.occurrenceCount, e.simulated, e.sopEnabled)
             FROM Event e
             LEFT JOIN Device d ON d.deviceId = e.deviceId
             LEFT JOIN DeviceCategory c ON c.categoryId = d.category.categoryId
@@ -146,16 +146,22 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
      *
      * @return 갱신 행 수. 0 이면 이미 확인됐거나 모의 행이 아니거나 없음
      */
+    // 2026-10-12: SOP 스냅샷 — event 서버 ACK_SQL 과 같은 규칙을 한 문장으로. SOP 이벤트인데 스냅샷이 없으면 0행(거절),
+    // SOP 가 아니면 스냅샷을 버린다. jsonb 캐스트가 필요해 native 쿼리. 0행 사유는 서비스가 엔티티로 가린다.
     @Modifying(clearAutomatically = true)
-    @Query("""
-            UPDATE Event e
-               SET e.ackedAt = :ackedAt, e.ackedBy = :ackedBy,
-                   e.clearedAt = COALESCE(e.clearedAt, :ackedAt)
-             WHERE e.eventId = :eventId AND e.simulated = TRUE AND e.ackedAt IS NULL
+    @Query(nativeQuery = true, value = """
+            UPDATE tbl_event
+               SET acked_at   = :ackedAt,
+                   acked_by   = :ackedBy,
+                   cleared_at = COALESCE(cleared_at, :ackedAt),
+                   sop_result = CASE WHEN sop_enabled THEN CAST(:sopResult AS jsonb) END
+             WHERE event_id = :eventId AND simulated AND acked_at IS NULL
+               AND (NOT sop_enabled OR CAST(:sopResult AS text) IS NOT NULL)
             """)
     int ackSimulated(@Param("eventId") UUID eventId,
                      @Param("ackedBy") Long ackedBy,
-                     @Param("ackedAt") OffsetDateTime ackedAt);
+                     @Param("ackedAt") OffsetDateTime ackedAt,
+                     @Param("sopResult") String sopResultJson);
 
     /**
      * 알람명 드롭다운("데이터 선택")용 — 실제로 발생한 적 있는 (ruleId, ruleName) 만.

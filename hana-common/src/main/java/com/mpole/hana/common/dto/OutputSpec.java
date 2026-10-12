@@ -1,8 +1,11 @@
 package com.mpole.hana.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.mpole.hana.common.constant.ControlTrigger;
 import com.mpole.hana.common.constant.NotificationChannel;
 
 import lombok.Builder;
@@ -31,7 +34,13 @@ public record OutputSpec(
         CctvOutput cctv,
         SmsOutput sms,
         EmailOutput email,
-        DeviceControlOutput deviceControl
+        /*
+         * 디바이스 제어 목록(2026-10-12 단건 deviceControl → 목록). 한 레벨에서 여러 장비를 각자의 시점에 제어한다.
+         * 옛 키 "deviceControl"(단건 객체)로 저장된 데이터도 1건짜리 목록으로 읽힌다.
+         */
+        @JsonAlias("deviceControl")
+        @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
+        List<DeviceControlOutput> deviceControls
 ) {
 
     /** 팝업/토스트 알림. 사용자 확인(ack) 대상. */
@@ -64,10 +73,20 @@ public record OutputSpec(
     public record EmailOutput(boolean enabled, Long recipientGroupId, Long templateId) {
     }
 
-    /** 디바이스 제어 명령(서버 사이드). commandPointId 에 value 를 쓴다. */
+    /**
+     * 디바이스 제어 명령(서버 사이드). {@code commandPointId}(tbl_device_command_point) 에 {@code value} 를 보낸다.
+     * {@code value} 해석은 기존 수동 제어(POST /api/command/control)와 같다 — TOGGLE 은 1/0, ENUM 은 선택지 값, RANGE 는 숫자.
+     *
+     * @param trigger 실행 시점. null 이면 {@link ControlTrigger#ON_OCCUR} (2026-10-12)
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record DeviceControlOutput(boolean enabled, Long commandPointId, String value) {
+    public record DeviceControlOutput(boolean enabled, Long commandPointId, String value, ControlTrigger trigger) {
+
+        /** 실행 시점(지정 없으면 발생 시). */
+        public ControlTrigger triggerOrDefault() {
+            return trigger == null ? ControlTrigger.ON_OCCUR : trigger;
+        }
     }
 
     public boolean popupEnabled() {
@@ -90,8 +109,23 @@ public record OutputSpec(
         return email != null && email.enabled();
     }
 
+    /** 켜진 제어가 하나라도 있는가. */
     public boolean deviceControlEnabled() {
-        return deviceControl != null && deviceControl.enabled();
+        return deviceControls != null && deviceControls.stream().anyMatch(c -> c != null && c.enabled());
+    }
+
+    /** 이 시점에 실행할 켜진 제어 목록(제어포인트가 비어 있는 항목은 제외). */
+    @JsonIgnore
+    public List<DeviceControlOutput> controlsFor(ControlTrigger trigger) {
+        if (deviceControls == null) return List.of();
+        return deviceControls.stream()
+                .filter(c -> c != null && c.enabled() && c.commandPointId() != null && c.triggerOrDefault() == trigger)
+                .toList();
+    }
+
+    /** 이 시점에 실행할 제어가 있는가. event 서버가 digitaltwin 호출 여부를 정할 때 쓴다. */
+    public boolean hasControlsFor(ControlTrigger trigger) {
+        return !controlsFor(trigger).isEmpty();
     }
 
     /**
@@ -104,7 +138,7 @@ public record OutputSpec(
         //if (cctvEnabled()) out.add(NotificationChannel.CCTV);
         //if (smsEnabled()) out.add(NotificationChannel.SMS);
         //if (emailEnabled()) out.add(NotificationChannel.EMAIL);
-        //if (deviceControlEnabled()) out.add(NotificationChannel.DEVICE_CONTROL);
+        if (deviceControlEnabled()) out.add(NotificationChannel.DEVICE_CONTROL);
         return out;
     }
 

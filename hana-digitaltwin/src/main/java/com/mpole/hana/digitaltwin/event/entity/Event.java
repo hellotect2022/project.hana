@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.event.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.mpole.hana.common.dto.OutputSpec;
 import jakarta.persistence.*;
 import lombok.*;
@@ -233,6 +234,22 @@ public class Event {
     @Column(name = "simulated_by")
     @Comment("모의 이벤트를 띄운 사용자 id(tbl_user.user_id 소프트 참조). simulated=false 면 NULL")
     private Long simulatedBy;
+
+    /* ─────────────────────────────────────────────────────────────
+     * SOP 완료 스냅샷 (2026-10-12) — SOP 를 끝까지 완료하는 순간 = 확인(ack).
+     *   클라이언트가 확인 메시지에 클릭 기록 전체를 실어 보내고, 서버는 acked_at 을 찍는 같은 UPDATE 로 sop_result 를 저장한다.
+     *   sop_enabled 는 발생 시점 outputs.sop.enabled 로 박제되며, true 면 sop_result 없이 확인할 수 없다(거절).
+     * ───────────────────────────────────────────────────────────── */
+
+    @Column(name = "sop_enabled", nullable = false)
+    @Builder.Default
+    @Comment("SOP 이벤트 여부(발생 시점 outputs.sop.enabled 스냅샷). true 면 확인(ack) 시 sop_result 가 필수. 2026-10-12")
+    private boolean sopEnabled = false;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "sop_result", columnDefinition = "jsonb")
+    @Comment("SOP 완료 시 클라이언트가 확인 메시지에 실어 보낸 클릭 기록 스냅샷(형식 자유). 확인과 같은 UPDATE 로 한 번 저장. 2026-10-12")
+    private JsonNode sopResult;
 
     /** 조회 편의용 파생 상태(컬럼 아님) — 두 축의 조합. */
     @Transient

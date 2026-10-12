@@ -44,11 +44,11 @@ public class EventWriter {
             INSERT INTO tbl_event
              (event_id, rule_id, rule_name, event_code, level, scope, device_id, device_key, point_id, tag_name,
               point_type, value_raw, threshold_value, operator, trigger_value,
-              outputs, icon, effect, occurred_at, cleared_at, acked_at, occurrence_count, last_occurred_at)
+              outputs, icon, effect, occurred_at, cleared_at, acked_at, occurrence_count, last_occurred_at, sop_enabled)
             VALUES
              (:eventId, :ruleId, :ruleName, :eventCode, :level, :scope, :deviceId, :deviceKey, :pointId, :tagName,
               :pointType, :valueRaw, :thresholdValue, :operator, :triggerValue,
-              :outputs::jsonb, :icon, :effect, :occurredAt, :clearedAt, :ackedAt, 1, :occurredAt)
+              :outputs::jsonb, :icon, :effect, :occurredAt, :clearedAt, :ackedAt, 1, :occurredAt, :sopEnabled)
             ON CONFLICT (rule_id, device_id, point_id) WHERE cleared_at IS NULL AND NOT simulated DO NOTHING
             """;
     // ↑ 2026-10-07: 부분 유니크 uk_event_open 의 술어가 "cleared_at IS NULL AND NOT simulated" 로 바뀜(모의 이벤트 분리).
@@ -78,9 +78,18 @@ public class EventWriter {
     private static final String ACK_SQL = """
             UPDATE tbl_event
                SET acked_at = :ackedAt, acked_by = :ackedBy,
-                   cleared_at = COALESCE(cleared_at, :ackedAt)
+                   cleared_at = COALESCE(cleared_at, :ackedAt),
+                   sop_result = CASE WHEN sop_enabled THEN CAST(:sopResult AS jsonb) END
              WHERE event_id = :eventId AND acked_at IS NULL
+               AND (NOT sop_enabled OR CAST(:sopResult AS text) IS NOT NULL)
              RETURNING event_code
+            """;
+    // ↑ 2026-10-12 SOP 스냅샷: 판별·저장·확인을 한 문장으로. SOP 이벤트인데 스냅샷이 없으면 0행(거절),
+    //   SOP 가 아니면 스냅샷을 버린다(CASE → NULL). 0행이면 호출부가 ACK_STATE_SQL 로 사유를 가린다.
+
+    /** 확인 UPDATE 가 0행일 때만 — 이미 확인됨인지, SOP 스냅샷 누락(거절)인지, 없는 id 인지 가린다. */
+    private static final String ACK_STATE_SQL = """
+            SELECT sop_enabled, acked_at FROM tbl_event WHERE event_id = :eventId
             """;
 
     /**
@@ -130,6 +139,8 @@ public class EventWriter {
                 .bind("icon", p(ev.icon(), String.class))
                 .bind("effect", p(ev.effect(), String.class))
                 .bind("occurredAt", p(ev.occurredAt(), OffsetDateTime.class))
+                // SOP 이벤트 여부(2026-10-12) — 발생 시점 outputs 로 박제. 확인 때 sop_result 필수 판별의 근거(DB 정본)
+                .bind("sopEnabled", ev.outputs() != null && ev.outputs().sopEnabled())
                 .fetch()
                 .rowsUpdated()
                 .map(rows -> rows > 0)
@@ -170,17 +181,33 @@ public class EventWriter {
     }
 
     /**
-     * 확인. 실제로 확인 처리된 행의 event_code(없으면 Optional.empty 안의 null 대신 빈 Optional)를 돌려준다.
-     * 이미 확인됐거나 없는 id 면 empty Mono.
+     * 확인. 실제로 확인 처리된 행의 event_code(없으면 빈 Optional)를 돌려준다.
+     * 0행(이미 확인됨 · SOP 스냅샷 누락 · 없는 id)이면 empty Mono — 사유는 {@link #ackState} 로 가린다.
+     *
+     * @param sopResultJson SOP 클릭 기록 스냅샷(JSON 문자열, 형식 자유). SOP 이벤트면 필수, 아니면 무시된다. null 가능
      */
-    public Mono<Optional<String>> ack(UUID eventId, Long userId, OffsetDateTime ackedAt) {
+    public Mono<Optional<String>> ack(UUID eventId, Long userId, OffsetDateTime ackedAt, String sopResultJson) {
         return postgresDatabaseClient.sql(ACK_SQL)
                 .bind("eventId", eventId)
                 .bind("ackedAt", p(ackedAt, OffsetDateTime.class))
                 .bind("ackedBy", p(userId, Long.class))
+                .bind("sopResult", p(sopResultJson, String.class))
                 .map((row, meta) -> Optional.ofNullable(row.get("event_code", String.class)))
                 .one()
                 .doOnError(e -> log.error("[EventWriter] tbl_event 확인 UPDATE 실패: {}", e.getMessage()));
+    }
+
+    /** 확인 UPDATE 0행 사유 판별용 상태. 행이 없으면 empty. */
+    public record AckState(boolean sopEnabled, boolean acked) {
+    }
+
+    public Mono<AckState> ackState(UUID eventId) {
+        return postgresDatabaseClient.sql(ACK_STATE_SQL)
+                .bind("eventId", eventId)
+                .map((row, meta) -> new AckState(
+                        Boolean.TRUE.equals(row.get("sop_enabled", Boolean.class)),
+                        row.get("acked_at", OffsetDateTime.class) != null))
+                .one();
     }
 
     /**

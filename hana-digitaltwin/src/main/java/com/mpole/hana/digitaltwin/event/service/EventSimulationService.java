@@ -2,6 +2,8 @@ package com.mpole.hana.digitaltwin.event.service;
 
 import com.fasterxml.uuid.Generators;
 import com.fasterxml.uuid.impl.TimeBasedEpochGenerator;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.mpole.hana.common.constant.ControlTrigger;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePoint;
@@ -66,12 +68,16 @@ public class EventSimulationService {
 
     private static final TimeBasedEpochGenerator UUID_V7 = Generators.timeBasedEpochGenerator();
 
+    /** sopResult 크기 상한(문자 수, 약 256KB) — event 서버 웹소켓 ACK 와 같은 값. */
+    private static final int MAX_SOP_RESULT_CHARS = 256 * 1024;
+
     private final EventRuleRepository eventRuleRepository;
     private final EventRepository eventRepository;
     private final DeviceRepository deviceRepository;
     private final DevicePointRepository devicePointRepository;
     private final DeviceCategoryRepository deviceCategoryRepository;
     private final DeviceCategoryCascadeService categoryCascadeService;
+    private final EventControlExecutor controlExecutor;
 
     /** 드롭다운 — 모의 전용 규칙 전부(활성 여부 무관). 코드가 비어 있는 규칙은 고를 수 없으므로 제외. */
     public List<ScenarioOption> scenarios() {
@@ -169,26 +175,41 @@ public class EventSimulationService {
                 .lastOccurredAt(now)
                 .occurrenceCount(1)
                 .simulated(true)
+                // SOP 이벤트 여부(2026-10-12) — 발생 시점 outputs 로 박제. true 면 확인 시 sopResult 필수
+                .sopEnabled(chosen.getOutputs() != null && chosen.getOutputs().sopEnabled())
                 .simulatedBy(userId)
                 .build();
         eventRepository.save(e);
         log.info("[EventSimulation] 모의 이벤트 발생. eventId={}, eventCode={}, ruleId={}, deviceId={}, pointId={}, level={}, by={}",
                 e.getEventId(), eventCode, rule.getRuleId(), device.getDeviceId(), point.getPointId(), e.getLevel(), userId);
+        // 발생 시점 디바이스 제어(2026-10-12) — 모의라 장비는 움직이지 않고 "실행했을 목록" 만 로그로 남는다.
+        controlExecutor.execute(e, ControlTrigger.ON_OCCUR);
         return SimulateResponse.of(e, device.getDeviceName(), false);
     }
 
     /** 확인 = 종료. 모의 행만 대상이라 실제 이벤트는 건드리지 못한다. 이미 확인된 건은 기존 값 그대로 반환. */
     @Transactional
-    public AckResponse ack(UUID eventId, Long userId) {
+    public AckResponse ack(UUID eventId, Long userId, JsonNode sopResult) {
         Event before = eventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("이벤트를 찾을 수 없습니다. id=" + eventId));
         if (!before.isSimulated()) {
             throw new IllegalArgumentException("모의 이벤트가 아닙니다. 실제 이벤트 확인은 웹소켓 ACK 로 보내세요. id=" + eventId);
         }
-        int updated = eventRepository.ackSimulated(eventId, userId, OffsetDateTime.now());
+        // SOP 스냅샷(2026-10-12) — 실제 이벤트(웹소켓 ACK)와 같은 규칙. SOP 이벤트인데 없으면 거절, SOP 가 아니면 버림.
+        String sopResultJson = (sopResult == null || sopResult.isNull()) ? null : sopResult.toString();
+        if (before.getAckedAt() == null && before.isSopEnabled() && sopResultJson == null) {
+            throw new IllegalArgumentException(
+                    "SOP 이벤트는 확인 시 sopResult(SOP 클릭 기록)가 필요합니다. SOP 를 끝까지 완료한 뒤 다시 확인하세요.");
+        }
+        if (sopResultJson != null && sopResultJson.length() > MAX_SOP_RESULT_CHARS) {
+            throw new IllegalArgumentException("sopResult 가 너무 큽니다(최대 " + MAX_SOP_RESULT_CHARS / 1024 + "KB).");
+        }
+        int updated = eventRepository.ackSimulated(eventId, userId, OffsetDateTime.now(), sopResultJson);
         Event after = eventRepository.findById(eventId).orElse(before);
         if (updated > 0) {
             log.info("[EventSimulation] 모의 이벤트 확인(종료). eventId={}, by={}", eventId, userId);
+            // 확인 시점 디바이스 제어(2026-10-12) — 최초 확인 때만. 모의라 로그만 남는다.
+            controlExecutor.execute(after, ControlTrigger.ON_ACK);
         }
         return new AckResponse(eventId, after.getAckedAt(), after.getAckedBy(), after.getClearedAt(), updated == 0);
     }

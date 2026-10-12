@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.event.api;
 
 import com.mpole.hana.digitaltwin.event.dto.EventResponse;
+import com.mpole.hana.digitaltwin.event.dto.EventSimulationDtos.AckRequest;
 import com.mpole.hana.digitaltwin.event.dto.EventSimulationDtos.AckResponse;
 import com.mpole.hana.digitaltwin.event.dto.EventSimulationDtos.ScenarioOption;
 import com.mpole.hana.digitaltwin.event.dto.EventSimulationDtos.SimulateRequest;
@@ -9,6 +10,7 @@ import com.mpole.hana.digitaltwin.event.service.EventSimulationService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import com.mpole.hana.digitaltwin.global.security.JwtAuthenticationFilter;
 import com.mpole.hana.digitaltwin.iam.user.repository.UserRepository;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,6 +55,7 @@ public class EventSimulationController {
         return ResponseEntity.ok(ApiResponse.success("시나리오 목록", simulationService.scenarios()));
     }
 
+    @Hidden
     @Operation(
             summary = "시나리오 적용 장비 목록",
             description = "그 시나리오 규칙이 적용되는 장비 id. DEVICE 범위면 1개, CATEGORY 범위면 하위 소분류의 장비 전부. 클릭 가능한 장비만 켤 때 쓴다.",
@@ -86,15 +89,17 @@ public class EventSimulationController {
     @Operation(
             summary = "모의 이벤트 확인(ack) = 종료",
             description = "acked_at/acked_by 를 기록하고 미해소면 cleared_at 도 같은 시각으로 닫는다(확인=종료, 실제와 같은 규칙. 해소 단계 없음). "
-                    + "simulated 행만 대상이라 실제 이벤트 id 를 넣으면 400. 이미 확인된 건은 기존 값 그대로 `alreadyAcked=true`.",
+                    + "simulated 행만 대상이라 실제 이벤트 id 를 넣으면 400. 이미 확인된 건은 기존 값 그대로 `alreadyAcked=true`. "
+                    + "본문 `{\"sopResult\": {…}}` — SOP 이벤트는 SOP 클릭 기록 스냅샷이 필수(없으면 400), SOP 가 아니면 생략·무시(2026-10-12).",
             parameters = {@Parameter(name = "id", description = "모의 이벤트 ID(UUIDv7)", required = true)}
     )
     @PostMapping("/{id}/ack")
     public ResponseEntity<ApiResponse<AckResponse>> ack(
             @PathVariable UUID id,
+            @RequestBody(required = false) AckRequest request,
             @AuthenticationPrincipal JwtAuthenticationFilter.UserPrincipal principal
     ) {
-        AckResponse res = simulationService.ack(id, resolveUserId(principal));
+        AckResponse res = simulationService.ack(id, resolveUserId(principal), request == null ? null : request.sopResult());
         return ResponseEntity.ok(ApiResponse.success(res.alreadyAcked() ? "이미 확인된 모의 이벤트" : "모의 이벤트 확인(종료)", res));
     }
 

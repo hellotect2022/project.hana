@@ -32,12 +32,27 @@ public record EventHistoryDto(
         DeviceBundle data,
         EventOccurrence event,
         EventClear clear,
-        EventAck ack
+        EventAck ack,
+        /** 확인 거절 사유 — {@code eventType=ACK_REJECTED} 일 때만. 보낸 세션에만 나간다(2026-10-12). */
+        String reason
 ) {
 
     public static final String TYPE_DEVICE = "DEVICE";
     public static final String TYPE_EVENT = "EVENT";
     public static final String TYPE_EVENT_CLEAR = "EVENT_CLEAR";
+    public static final String TYPE_ACK_REJECTED = "ACK_REJECTED";
+
+    /**
+     * 확인 거절 봉투(2026-10-12) — SOP 이벤트를 sopResult 없이 확인하려 할 때. 브로드캐스트하지 않고 보낸 세션에만 보낸다.
+     * <pre>{"eventType":"ACK_REJECTED","eventId":"…","reason":"…"}</pre>
+     */
+    public static EventHistoryDto ackRejected(UUID eventId, String reason) {
+        return EventHistoryDto.builder()
+                .eventType(TYPE_ACK_REJECTED)
+                .eventId(eventId)
+                .reason(reason)
+                .build();
+    }
 
     /**
      * 발생 봉투. {@code eventType} 은 규칙의 {@code event_code}(예 WC_CLEAN) 이고, 규칙에 코드가 없으면 "EVENT" 다
