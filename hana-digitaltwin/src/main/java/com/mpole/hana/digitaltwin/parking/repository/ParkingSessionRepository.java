@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * 주차 건 조회 (2026-10-13). 기간 필터는 "그 기간에 입차 <b>또는</b> 출차가 있었던 건" 이다.
@@ -56,4 +57,8 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
     /** 지금 주차중 — 기간과 무관하게 입차 기록이 있고 아직 안 나간 건 */
     @Query("SELECT count(s) FROM ParkingSession s WHERE s.hasIn = TRUE AND s.status = 'PARKED'")
     long countParked();
+
+    /** 통합현황 — 층별 점유 집계용 주차중 건 */
+    @Query("SELECT s FROM ParkingSession s WHERE s.hasIn = TRUE AND s.status = 'PARKED'")
+    List<ParkingSession> findParkedSessions();
 }

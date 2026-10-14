@@ -247,7 +247,34 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
         WHERE d.deviceKey LIKE 'PS_PGE_GEN%'
         ORDER BY d.deviceKey ASC
         """)
-    List<Device> fetchGeneratorDevices(); 
+    List<Device> fetchGeneratorDevices();
+
+    /** MCC 및 동력 계통도 — PS_MCC_% 설비 전체 */
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'PS_MCC_%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchMccDiagramDevices();
+
+    /** 수변전 설비 계통도 — SHV·HV·GEN·LV (계측 패널·LV hotspot id 매핑) */
+    @Query("""
+        SELECT d FROM Device d
+        WHERE d.deviceKey LIKE 'PS_PRD_SHV%'
+           OR d.deviceKey LIKE 'PS_PRD_HV%'
+           OR d.deviceKey LIKE 'PS_PGE_GEN%'
+           OR d.deviceKey LIKE 'PS_PRD_LV%'
+        ORDER BY d.deviceKey ASC
+        """)
+    List<Device> fetchSubstationDiagramDevices();
+
+    /** 소방 — 화재감지기(DET) 등록 대수 */
+    @Query("""
+        SELECT COUNT(d) FROM Device d
+        JOIN d.category c
+        WHERE c.categoryCode = 'DET'
+        """)
+    long countFireDetectorDevices();
 
 //    @Query("""
 //            SELECT d FROM Device d

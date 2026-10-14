@@ -1,19 +1,38 @@
 package com.mpole.hana.digitaltwin.dashboard.situation.service;
 
 import com.mpole.hana.common.dto.XnPointData;
+import com.mpole.hana.digitaltwin.buildingLighting.domain.CommStatus;
+import com.mpole.hana.digitaltwin.buildingLighting.domain.LightingReading;
+import com.mpole.hana.digitaltwin.buildingLighting.domain.LightingState;
+import com.mpole.hana.digitaltwin.buildingLighting.service.BuildingLightingReader;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.*;
 import com.mpole.hana.digitaltwin.device.entity.Device;
+import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
+import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.event.dto.AlarmHistoryStats;
+import com.mpole.hana.digitaltwin.event.service.EventService;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
+import com.mpole.hana.digitaltwin.energy.dto.EnergySummary;
+import com.mpole.hana.digitaltwin.energy.service.EnergySummaryService;
+import com.mpole.hana.digitaltwin.parking.dto.ParkingSummary;
+import com.mpole.hana.digitaltwin.parking.entity.ParkingSession;
+import com.mpole.hana.digitaltwin.parking.repository.ParkingSessionRepository;
+import com.mpole.hana.digitaltwin.parking.service.ParkingQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,9 +47,249 @@ import java.util.stream.Collectors;
 public class DashboardSituationService {
 
     private static final Pattern LEADING_NUMBER = Pattern.compile("-?\\d+(?:\\.\\d+)?");
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    private static final String LIGHT_MODE_GENERAL = "일반 조명";
+    private static final String LIGHT_MODE_WC = "화장실 조명";
+    private static final String LIGHT_MODE_PARKING = "지하주차장 조명";
+    private static final List<String> LIGHT_MODES = List.of(
+            LIGHT_MODE_GENERAL, LIGHT_MODE_WC, LIGHT_MODE_PARKING);
+
+    private static final Pattern PARKING_FLOOR = Pattern.compile("(B\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final List<String> PARKING_FLOORS = List.of(
+            "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+    private static final int PARKING_CAPACITY_PER_FLOOR = 40;
 
     private final DeviceRepository deviceRepository;
+    private final DeviceCategoryRepository deviceCategoryRepository;
     private final DeviceCurrentValueRepository DeviceCurrentValueRepository;
+    private final EnergySummaryService energySummaryService;
+    private final EventService eventService;
+    private final BuildingLightingReader buildingLightingReader;
+    private final ParkingQueryService parkingQueryService;
+    private final ParkingSessionRepository parkingSessionRepository;
+
+    /**
+     * 금일 전력·가스 — 원격검침/누적 포인트 {@link EnergySummaryService} (KST 0시 기준 스냅샷).
+     */
+    @Transactional(readOnly = true)
+    public SituationDailyUsageKpiResponse getDailyUsageKpi() {
+        List<Device> elecMeters = deviceRepository.fetchElectricMeterDevices();
+        List<Device> gasMeters = deviceRepository.fetchGasMeterDevices();
+
+        List<Long> elecIds = elecMeters.stream().map(Device::getDeviceId).toList();
+        List<Long> gasIds = gasMeters.stream().map(Device::getDeviceId).toList();
+
+        List<EnergySummary> elecSummaries = elecIds.isEmpty()
+                ? List.of()
+                : energySummaryService.summary(elecIds, List.of("kWh", "total_kWh", "KWH", "total-kWh"));
+        List<EnergySummary> gasSummaries = gasIds.isEmpty()
+                ? List.of()
+                : energySummaryService.summary(gasIds, List.of("G", "total-g"));
+
+        double todayPowerKwh = sumTodayUsage(elecSummaries);
+        double todayGasM3 = sumTodayUsage(gasSummaries);
+
+        boolean powerLinked = hasTodayUsage(elecSummaries);
+        boolean gasLinked = hasTodayUsage(gasSummaries);
+
+        return SituationDailyUsageKpiResponse.builder()
+                .todayPowerMwh(powerLinked ? roundUsage3(todayPowerKwh / 1000.0) : null)
+                .todayGasNm3(gasLinked ? roundUsage3(todayGasM3) : null)
+                .powerLinked(powerLinked)
+                .gasLinked(gasLinked)
+                .powerMeterCount(elecMeters.size())
+                .gasMeterCount(gasMeters.size())
+                .powerPointCount(elecSummaries.size())
+                .gasPointCount(gasSummaries.size())
+                .powerSource("EnergySummary RM_KWH/KWH 누적 포인트 금일(kWh→MWh)")
+                .gasSource("EnergySummary RM_GM total-g/G 누적 포인트 금일(Nm³)")
+                .build();
+    }
+
+    private static double sumTodayUsage(List<EnergySummary> summaries) {
+        return summaries.stream()
+                .map(EnergySummary::today)
+                .filter(Objects::nonNull)
+                .map(EnergySummary.Period::value)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+    }
+
+    private static boolean hasTodayUsage(List<EnergySummary> summaries) {
+        return summaries.stream()
+                .anyMatch(s -> s.today() != null && s.today().value() != null);
+    }
+
+    private static double roundUsage3(double value) {
+        return Math.round(value * 1000.0) / 1000.0;
+    }
+
+    /**
+     * 소방방재 — 화재감지기(DET) 등록 대수 + 금일 FDP 계열 이벤트(실DB, 모의 제외).
+     */
+    @Transactional(readOnly = true)
+    public SituationFireKpiResponse getFireKpi() {
+        long detectorCount = deviceRepository.countFireDetectorDevices();
+        int detCount = detectorCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) detectorCount;
+
+        OffsetDateTime dayStart = LocalDate.now(KST).atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime now = OffsetDateTime.now(KST);
+
+        long alarmTotal = 0;
+        long alarmOpen = 0;
+        Optional<Long> fdpCategoryId = resolveFireRootCategoryId();
+        if (fdpCategoryId.isPresent()) {
+            AlarmHistoryStats stats = eventService.getAlarmHistoryStats(
+                    null, null, null, null, fdpCategoryId.get(), false, null, dayStart, now);
+            alarmTotal = stats.total();
+            alarmOpen = stats.open();
+        }
+
+        List<SituationFireDeviceResponse> devices = List.of(
+                SituationFireDeviceResponse.builder()
+                        .id("det")
+                        .label("화재감지기")
+                        .count(detCount)
+                        .build()
+        );
+
+        boolean linked = detCount > 0;
+        return SituationFireKpiResponse.builder()
+                .alarmCount((int) Math.min(alarmTotal, Integer.MAX_VALUE))
+                .sensorCount((int) Math.min(alarmOpen, Integer.MAX_VALUE))
+                .devices(devices)
+                .linked(linked)
+                .source("tbl_device(DET) + tbl_event(FDP·금일·simulated=false)")
+                .build();
+    }
+
+    private Optional<Long> resolveFireRootCategoryId() {
+        return deviceCategoryRepository.findAllWithParent().stream()
+                .filter(c -> "FDP".equalsIgnoreCase(c.getCategoryCode()))
+                .map(DeviceCategory::getCategoryId)
+                .findFirst();
+    }
+
+    /**
+     * 조명제어 — 건물조명(LCS) 장비를 구역 유형(일반/화장실/지하주차)별 ON·OFF·알람 집계.
+     */
+    @Transactional(readOnly = true)
+    public SituationLightingKpiResponse getLightingKpi() {
+        List<Long> categoryIds = buildingLightingReader.resolveCategoryIds();
+        List<LightingReading> readings = buildingLightingReader.readAll();
+        Map<String, List<LightingReading>> byMode = new LinkedHashMap<>();
+        for (String mode : LIGHT_MODES) {
+            byMode.put(mode, new ArrayList<>());
+        }
+        for (LightingReading reading : readings) {
+            byMode.get(resolveLightingSituationMode(reading)).add(reading);
+        }
+
+        Map<String, SituationLightingModeCountsResponse> countsByMode = new LinkedHashMap<>();
+        for (String mode : LIGHT_MODES) {
+            countsByMode.put(mode, aggregateLightingModeCounts(byMode.get(mode)));
+        }
+
+        boolean linked = !categoryIds.isEmpty();
+        return SituationLightingKpiResponse.builder()
+                .modes(LIGHT_MODES)
+                .byMode(countsByMode)
+                .linked(linked)
+                .source("건물조명(LCS)·tbl_device_current_value·구역/장비명 분류")
+                .build();
+    }
+
+    private static String resolveLightingSituationMode(LightingReading reading) {
+        String deviceName = reading.deviceName() != null ? reading.deviceName().toUpperCase() : "";
+        String zoneName = reading.zoneName() != null ? reading.zoneName() : "";
+        String floorName = reading.floorName() != null ? reading.floorName() : "";
+
+        if (deviceName.contains("-WC-") || deviceName.contains("_WC")
+                || deviceName.contains("RL_WC")
+                || zoneName.contains("화장실")
+                || zoneName.toUpperCase().contains("WC")) {
+            return LIGHT_MODE_WC;
+        }
+        if (zoneName.contains("주차") || floorName.contains("주차")
+                || deviceName.contains("-PK-") || deviceName.contains("주차")
+                || deviceName.contains("PARKING")) {
+            return LIGHT_MODE_PARKING;
+        }
+        return LIGHT_MODE_GENERAL;
+    }
+
+    private static SituationLightingModeCountsResponse aggregateLightingModeCounts(List<LightingReading> readings) {
+        int on = 0;
+        int off = 0;
+        int alarm = 0;
+        for (LightingReading r : readings) {
+            if (r.commStatus() == CommStatus.ALARM) {
+                alarm++;
+            }
+            if (r.state() == LightingState.ON) {
+                on++;
+            } else {
+                off++;
+            }
+        }
+        return SituationLightingModeCountsResponse.builder().on(on).off(off).alarm(alarm).build();
+    }
+
+    /**
+     * 주차관리 — gateway 적재 tbl_parking_in/out 기준 현재 주차·금일 입출차·층별 점유(B1~B7, 定원 40면/층).
+     */
+    @Transactional(readOnly = true)
+    public SituationParkingKpiResponse getParkingKpi() {
+        LocalDate today = LocalDate.now(KST);
+        ParkingSummary todaySummary = parkingQueryService.summary(today, null, null);
+        long parked = parkingSessionRepository.countParked();
+
+        Map<String, Integer> occupiedByFloor = new LinkedHashMap<>();
+        for (String floor : PARKING_FLOORS) {
+            occupiedByFloor.put(floor, 0);
+        }
+        for (ParkingSession session : parkingSessionRepository.findParkedSessions()) {
+            String floor = parseParkingFloor(session.getInDevice());
+            if (floor != null && occupiedByFloor.containsKey(floor)) {
+                occupiedByFloor.merge(floor, 1, Integer::sum);
+            }
+        }
+
+        List<SituationParkingLotKpiResponse> lots = PARKING_FLOORS.stream()
+                .map(floor -> SituationParkingLotKpiResponse.builder()
+                        .floor(floor)
+                        .occupied(occupiedByFloor.get(floor))
+                        .total(PARKING_CAPACITY_PER_FLOOR)
+                        .build())
+                .toList();
+
+        int totalCapacity = PARKING_FLOORS.size() * PARKING_CAPACITY_PER_FLOOR;
+        int occupied = parked > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) parked;
+        boolean linked = parkingSessionRepository.count() > 0;
+
+        return SituationParkingKpiResponse.builder()
+                .occupied(occupied)
+                .total(totalCapacity)
+                .lots(lots)
+                .todayInCount(todaySummary.inCount())
+                .todayOutCount(todaySummary.outCount())
+                .linked(linked)
+                .source("tbl_parking_in/out(gateway 5분 동기) + 입차장비명 B층 파싱 + 定원 40면/층(B1~B7)")
+                .build();
+    }
+
+    private static String parseParkingFloor(String inDevice) {
+        if (inDevice == null || inDevice.isBlank()) {
+            return null;
+        }
+        Matcher matcher = PARKING_FLOOR.matcher(inDevice);
+        if (matcher.find()) {
+            return matcher.group(1).toUpperCase();
+        }
+        return null;
+    }
 
     @Transactional(readOnly = true)
     public List<SituationTopKpiItemResponse> getTopKpis() {

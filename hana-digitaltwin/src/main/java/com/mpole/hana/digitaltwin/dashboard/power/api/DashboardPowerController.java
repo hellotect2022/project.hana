@@ -1,5 +1,7 @@
 package com.mpole.hana.digitaltwin.dashboard.power.api;
 
+import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerMccRuntimeResponse;
+import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerSubstationRuntimeResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerPageSnapshotResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerSectionResponse;
@@ -41,6 +43,22 @@ public class DashboardPowerController {
         return ResponseEntity.ok(ApiResponse.success(
                 "전력 구간 현황",
                 dashboardPowerService.getSection(tab)
+        ));
+    }
+
+    @GetMapping("/mcc-runtime")
+    public ResponseEntity<ApiResponse<PowerMccRuntimeResponse>> getMccRuntime() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "MCC 및 동력 계통도 실시간",
+                dashboardPowerService.getMccRuntime()
+        ));
+    }
+
+    @GetMapping("/substation-runtime")
+    public ResponseEntity<ApiResponse<PowerSubstationRuntimeResponse>> getSubstationRuntime() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "수변전 설비 계통도 실시간",
+                dashboardPowerService.getSubstationRuntime()
         ));
     }
 }

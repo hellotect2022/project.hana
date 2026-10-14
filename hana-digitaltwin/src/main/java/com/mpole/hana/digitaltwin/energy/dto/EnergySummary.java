@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
  * @param sourceAt 현재값이 실제로 갱신된 시각
  * @param stale    현재값이 15분 넘게 갱신되지 않음(통신 끊김 의심). 금일·금월은 마지막 값으로 계산된다
  * @param today    금일 = 현재값 − 오늘 00:00 기준값(KST)
+ * @param week     금주 = 현재값 − 이번 주 월요일 00:00 기준값(KST)
  * @param month    금월 = 현재값 − 이달 1일 00:00 기준값(KST)
  */
 public record EnergySummary(
@@ -26,6 +27,7 @@ public record EnergySummary(
         OffsetDateTime sourceAt,
         boolean stale,
         Period today,
+        Period week,
         Period month
 ) {
 

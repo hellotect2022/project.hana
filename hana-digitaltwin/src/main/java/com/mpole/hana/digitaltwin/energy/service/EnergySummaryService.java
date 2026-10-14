@@ -8,15 +8,18 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 금일·금월 전력량 계산 (2026-10-12).
@@ -66,7 +69,10 @@ public class EnergySummaryService {
                      LIMIT 1
               ) cur ON TRUE
              WHERE s->>'tagName' = p.tag_name
-               AND COALESCE((s->>'accumulate')::boolean, false)
+               AND (
+                    COALESCE((s->>'accumulate')::boolean, false)
+                    %s
+               )
                %s
              ORDER BY d.device_name, p.tag_name
             """;
@@ -99,20 +105,42 @@ public class EnergySummaryService {
 
     /** @param deviceIds 없거나 비면 전체 누적 포인트 */
     public List<EnergySummary> summary(Collection<Long> deviceIds) {
+        return summary(deviceIds, Set.of());
+    }
+
+    /**
+     * @param forceIncludeTags 스키마 accumulate=false 여도 금일 계산 대상에 포함할 tag_name (예: RM_GM G)
+     */
+    public List<EnergySummary> summary(Collection<Long> deviceIds, Collection<String> forceIncludeTags) {
         boolean filter = deviceIds != null && !deviceIds.isEmpty();
+        Set<String> extraTags = forceIncludeTags == null
+                ? Set.of()
+                : forceIncludeTags.stream()
+                        .filter(t -> t != null && !t.isBlank())
+                        .map(String::trim)
+                        .collect(java.util.stream.Collectors.toSet());
+
+        String tagExtra = extraTags.isEmpty() ? "" : " OR p.tag_name IN (:forceTags)";
+        String deviceFilter = filter ? "AND p.device_id IN (:deviceIds)" : "";
+
         MapSqlParameterSource params = new MapSqlParameterSource();
         if (filter) params.addValue("deviceIds", deviceIds);
+        if (!extraTags.isEmpty()) params.addValue("forceTags", extraTags);
+
         List<Map<String, Object>> targets = jdbc.queryForList(
-                TARGET_SQL.formatted(filter ? "AND p.device_id IN (:deviceIds)" : ""), params);
+                TARGET_SQL.formatted(tagExtra, deviceFilter), params);
         if (targets.isEmpty()) return List.of();
 
         List<Long> pointIds = targets.stream().map(r -> ((Number) r.get("point_id")).longValue()).toList();
         OffsetDateTime now = OffsetDateTime.now(KST);
         LocalDate today = now.toLocalDate();
         OffsetDateTime dayStart = today.atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                .atStartOfDay(KST).toOffsetDateTime();
         OffsetDateTime monthStart = today.withDayOfMonth(1).atStartOfDay(KST).toOffsetDateTime();
 
         Map<Long, BaseRow> dayRows = base(pointIds, dayStart);
+        Map<Long, BaseRow> weekRows = base(pointIds, weekStart);
         Map<Long, BaseRow> monthRows = base(pointIds, monthStart);
 
         List<EnergySummary> out = new ArrayList<>(targets.size());
@@ -131,6 +159,7 @@ public class EnergySummaryService {
                     (String) r.get("unit"),
                     current, sourceAt, stale,
                     toPeriod(dayRows.get(pointId), current, dayStart),
+                    toPeriod(weekRows.get(pointId), current, weekStart),
                     toPeriod(monthRows.get(pointId), current, monthStart)));
         }
         return out;

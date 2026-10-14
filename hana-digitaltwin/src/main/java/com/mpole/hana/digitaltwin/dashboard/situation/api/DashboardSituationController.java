@@ -1,7 +1,11 @@
 package com.mpole.hana.digitaltwin.dashboard.situation.api;
 
+import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationDailyUsageKpiResponse;
+import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationFireKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationBoardResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationIndoorEnvKpiResponse;
+import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationLightingKpiResponse;
+import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationParkingKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationPowerKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationRenewKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationTopKpiItemResponse;
@@ -35,6 +39,38 @@ public class DashboardSituationController {
         return ResponseEntity.ok(ApiResponse.success(
                 "통합현황 운영 현황판",
                 dashboardSituationService.getBoard()
+        ));
+    }
+
+    @GetMapping("/fire-kpi")
+    public ResponseEntity<ApiResponse<SituationFireKpiResponse>> getFireKpi() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "통합현황 소방방재",
+                dashboardSituationService.getFireKpi()
+        ));
+    }
+
+    @GetMapping("/lighting-kpi")
+    public ResponseEntity<ApiResponse<SituationLightingKpiResponse>> getLightingKpi() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "통합현황 조명제어",
+                dashboardSituationService.getLightingKpi()
+        ));
+    }
+
+    @GetMapping("/parking-kpi")
+    public ResponseEntity<ApiResponse<SituationParkingKpiResponse>> getParkingKpi() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "통합현황 주차관리",
+                dashboardSituationService.getParkingKpi()
+        ));
+    }
+
+    @GetMapping("/daily-usage-kpi")
+    public ResponseEntity<ApiResponse<SituationDailyUsageKpiResponse>> getDailyUsageKpi() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "통합현황 금일 전력·가스 사용량",
+                dashboardSituationService.getDailyUsageKpi()
         ));
     }
 

@@ -1,6 +1,10 @@
 package com.mpole.hana.digitaltwin.dashboard.power.service;
 
 import com.mpole.hana.common.dto.XnPointData;
+import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerMccRuntimeItemResponse;
+import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerMccRuntimeResponse;
+import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerSubstationRuntimeItemResponse;
+import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerSubstationRuntimeResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerMetricResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerPageSnapshotResponse;
@@ -11,6 +15,8 @@ import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerSectionResponse;
 import com.mpole.hana.digitaltwin.dashboard.power.dto.PowerTabResponse;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
+import com.mpole.hana.digitaltwin.energy.dto.EnergySummary;
+import com.mpole.hana.digitaltwin.energy.service.EnergySummaryService;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,17 +24,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DashboardPowerService {
 
+    private static final List<String> ELECTRIC_USAGE_TAGS = List.of(
+            "kWh", "total_kWh", "KWH", "total-kWh");
+
     private final DeviceRepository deviceRepository;
     private final DeviceCurrentValueRepository deviceCurrentValueRepository;
+    private final EnergySummaryService energySummaryService;
+    private final PowerUsageChartService powerUsageChartService;
 
     @Transactional(readOnly = true)
     public PowerPageSnapshotResponse getPageSnapshot() {
@@ -62,14 +77,69 @@ public class DashboardPowerService {
             cumulativeKwh += sumTotalKwh(currentValue.getPoints());
         }
 
+        List<Long> meterIdsList = meters.stream().map(Device::getDeviceId).toList();
+        List<EnergySummary> usageSummaries = meterIdsList.isEmpty()
+                ? List.of()
+                : energySummaryService.summary(meterIdsList, ELECTRIC_USAGE_TAGS);
+
+        double todayKwh = sumUsagePeriod(usageSummaries, EnergySummary::today);
+        double weekKwh = sumUsagePeriod(usageSummaries, EnergySummary::week);
+        double monthKwh = sumUsagePeriod(usageSummaries, EnergySummary::month);
+
+        boolean todayLinked = hasUsagePeriod(usageSummaries, EnergySummary::today);
+        boolean weekLinked = hasUsagePeriod(usageSummaries, EnergySummary::week);
+        boolean monthLinked = hasUsagePeriod(usageSummaries, EnergySummary::month);
+
+        List<Long> usagePointIds = usageSummaries.stream()
+                .map(EnergySummary::pointId)
+                .distinct()
+                .toList();
+        PowerUsageChartService.ChartBundle charts = powerUsageChartService.buildCharts(usagePointIds);
+
         return PowerKpiResponse.builder()
                 .cumulativeKwh(cumulativeKwh)
                 .runningCount(runningCount)
                 .meterTotal(meters.size())
+                .todayKwh(todayLinked ? roundUsage3(todayKwh) : null)
+                .weekKwh(weekLinked ? roundUsage3(weekKwh) : null)
+                .monthKwh(monthLinked ? roundUsage3(monthKwh) : null)
+                .todayLinked(todayLinked)
+                .weekLinked(weekLinked)
+                .monthLinked(monthLinked)
+                .realtimeSeries(charts.realtimeSeries())
+                .peakDemand(charts.peakDemand())
+                .mainChartsLinked(charts.linked())
                 .phaseBalance(buildPhaseBalance())
                 .source("tbl_device + tbl_device_current_value (KWH/total_kWh)")
+                .usageSource("EnergySummary RM_KWH 누적 포인트 + tbl_energy_snapshot (금일·금주·금월 kWh)")
                 .stub(false)
                 .build();
+    }
+
+    private static double sumUsagePeriod(
+            List<EnergySummary> summaries,
+            Function<EnergySummary, EnergySummary.Period> periodGetter) {
+        return summaries.stream()
+                .map(periodGetter)
+                .filter(Objects::nonNull)
+                .map(EnergySummary.Period::value)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+    }
+
+    private static boolean hasUsagePeriod(
+            List<EnergySummary> summaries,
+            Function<EnergySummary, EnergySummary.Period> periodGetter) {
+        return summaries.stream()
+                .anyMatch(s -> {
+                    EnergySummary.Period p = periodGetter.apply(s);
+                    return p != null && p.value() != null;
+                });
+    }
+
+    private static double roundUsage3(double value) {
+        return Math.round(value * 1000.0) / 1000.0;
     }
 
     /**
@@ -256,6 +326,180 @@ public class DashboardPowerService {
         } catch (NumberFormatException ignored) {
             return 0;
         }
+    }
+
+    /**
+     * MCC 및 동력 계통도 — hotspot id(언더스코어) ↔ 설비 실시간 포인트.
+     * device_name 이 MCC- 로 시작하는 Pan 은 hotspotId = MCC_B7_F3 형식.
+     */
+    @Transactional(readOnly = true)
+    public PowerMccRuntimeResponse getMccRuntime() {
+        List<Device> devices = deviceRepository.fetchMccDiagramDevices();
+        Set<Long> ids = devices.stream().map(Device::getDeviceId).collect(Collectors.toSet());
+        Map<Long, DeviceCurrentValue> snapshots = ids.isEmpty()
+                ? Map.of()
+                : deviceCurrentValueRepository.findAllById(ids).stream()
+                        .collect(Collectors.toMap(DeviceCurrentValue::getDeviceId, cv -> cv, (a, b) -> a));
+
+        List<PowerMccRuntimeItemResponse> items = new ArrayList<>();
+        int linked = 0;
+        for (Device device : devices) {
+            String deviceName = device.getDeviceName() != null ? device.getDeviceName().trim() : "";
+            String hotspotId = toMccHotspotId(deviceName);
+            if (hotspotId == null) {
+                continue;
+            }
+            DeviceCurrentValue snapshot = snapshots.get(device.getDeviceId());
+            List<XnPointData> points = snapshot != null ? snapshot.getPoints() : null;
+            boolean hasPoints = points != null && !points.isEmpty();
+            Map<String, String> valuesByTag = hasPoints ? tagValueMap(points) : Map.of();
+            boolean commOk = hasPoints && valuesByTag.values().stream().anyMatch(v -> v != null && !v.isBlank());
+            if (commOk) {
+                linked++;
+            }
+            items.add(PowerMccRuntimeItemResponse.builder()
+                    .hotspotId(hotspotId)
+                    .deviceId(device.getDeviceId())
+                    .deviceKey(device.getDeviceKey())
+                    .deviceName(deviceName)
+                    .linked(hasPoints)
+                    .commOk(commOk)
+                    .updatedAt(snapshot != null && snapshot.getUpdatedAt() != null
+                            ? snapshot.getUpdatedAt().toString() : null)
+                    .valuesByTag(valuesByTag)
+                    .build());
+        }
+
+        return PowerMccRuntimeResponse.builder()
+                .items(items)
+                .total(items.size())
+                .linked(linked)
+                .source("tbl_device + tbl_device_current_value (PS_MCC_%)")
+                .build();
+    }
+
+    /**
+     * 수변전 설비 — layout node id / hotspot id ↔ PS_PRD_* 설비 실시간 포인트.
+     * device_name(예: SHV-b) 또는 device_key 마지막 세그먼트를 panelId 로 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public PowerSubstationRuntimeResponse getSubstationRuntime() {
+        List<Device> devices = deviceRepository.fetchSubstationDiagramDevices();
+        Set<Long> ids = devices.stream().map(Device::getDeviceId).collect(Collectors.toSet());
+        Map<Long, DeviceCurrentValue> snapshots = ids.isEmpty()
+                ? Map.of()
+                : deviceCurrentValueRepository.findAllById(ids).stream()
+                        .collect(Collectors.toMap(DeviceCurrentValue::getDeviceId, cv -> cv, (a, b) -> a));
+
+        Map<String, PowerSubstationRuntimeItemResponse> byPanelId = new LinkedHashMap<>();
+
+        for (Device device : devices) {
+            String panelId = toSubstationPanelId(device);
+            if (panelId == null) {
+                continue;
+            }
+            DeviceCurrentValue snapshot = snapshots.get(device.getDeviceId());
+            List<XnPointData> points = snapshot != null ? snapshot.getPoints() : null;
+            boolean hasPoints = points != null && !points.isEmpty();
+            Map<String, String> valuesByTag = hasPoints ? tagValueMap(points) : Map.of();
+            boolean commOk = hasPoints && valuesByTag.values().stream().anyMatch(v -> v != null && !v.isBlank());
+
+            String deviceName = device.getDeviceName() != null ? device.getDeviceName().trim() : "";
+            PowerSubstationRuntimeItemResponse item = PowerSubstationRuntimeItemResponse.builder()
+                    .panelId(panelId)
+                    .deviceId(device.getDeviceId())
+                    .deviceKey(device.getDeviceKey())
+                    .deviceName(deviceName)
+                    .linked(hasPoints)
+                    .commOk(commOk)
+                    .updatedAt(snapshot != null && snapshot.getUpdatedAt() != null
+                            ? snapshot.getUpdatedAt().toString() : null)
+                    .valuesByTag(valuesByTag)
+                    .build();
+
+            PowerSubstationRuntimeItemResponse existing = byPanelId.get(panelId);
+            if (existing == null || (!existing.commOk() && item.commOk())) {
+                byPanelId.put(panelId, item);
+            }
+        }
+
+        List<PowerSubstationRuntimeItemResponse> items = new ArrayList<>(byPanelId.values());
+        int linked = (int) items.stream().filter(PowerSubstationRuntimeItemResponse::commOk).count();
+        return PowerSubstationRuntimeResponse.builder()
+                .items(items)
+                .total(items.size())
+                .linked(linked)
+                .source("tbl_device + tbl_device_current_value (PS_PRD_SHV/HV/LV, PS_PGE_GEN)")
+                .build();
+    }
+
+    private static final Map<String, String> SUBSTATION_GENERATOR_PANEL_IDS = Map.of(
+            "발전기1", "G1",
+            "발전기2", "G2"
+    );
+
+    private static String toSubstationPanelId(Device device) {
+        if (device == null) {
+            return null;
+        }
+        String deviceName = device.getDeviceName() != null ? device.getDeviceName().trim() : "";
+        if (!deviceName.isBlank()) {
+            String gen = SUBSTATION_GENERATOR_PANEL_IDS.get(deviceName);
+            if (gen != null) {
+                return gen;
+            }
+            if (isSubstationDiagramPanelId(deviceName)) {
+                return deviceName;
+            }
+        }
+        String code = extractCode(device.getDeviceKey());
+        if (code.isBlank() || code.toUpperCase(Locale.ROOT).startsWith("BLANK")) {
+            return null;
+        }
+        String gen = SUBSTATION_GENERATOR_PANEL_IDS.get(code);
+        if (gen != null) {
+            return gen;
+        }
+        return isSubstationDiagramPanelId(code) ? code : null;
+    }
+
+    private static boolean isSubstationDiagramPanelId(String id) {
+        if (id == null || id.isBlank()) {
+            return false;
+        }
+        if (id.startsWith("SHV-")) {
+            return true;
+        }
+        if ("LV-R".equals(id)) {
+            return true;
+        }
+        if (id.startsWith("LV-")) {
+            return true;
+        }
+        return id.equals("G1") || id.equals("G2") || id.equals("G3-1") || id.equals("G3-2");
+    }
+
+    private static String toMccHotspotId(String deviceName) {
+        if (deviceName == null || deviceName.isBlank()) {
+            return null;
+        }
+        if (!deviceName.toUpperCase(Locale.ROOT).startsWith("MCC-")) {
+            return null;
+        }
+        return deviceName.replace('-', '_');
+    }
+
+    private static Map<String, String> tagValueMap(List<XnPointData> points) {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (XnPointData point : points) {
+            if (point == null || point.tagName() == null) {
+                continue;
+            }
+            String tag = point.tagName().trim();
+            String raw = point.valueRaw();
+            map.putIfAbsent(tag, raw != null ? raw.trim() : null);
+        }
+        return map;
     }
 
     private static PowerTabResponse tab(String id, String label) {
