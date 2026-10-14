@@ -1,8 +1,10 @@
 package com.mpole.hana.digitaltwin.parking.api;
 
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
+import com.mpole.hana.digitaltwin.parking.dto.ParkingOccupancy;
 import com.mpole.hana.digitaltwin.parking.dto.ParkingSessionResponse;
 import com.mpole.hana.digitaltwin.parking.dto.ParkingSummary;
+import com.mpole.hana.digitaltwin.parking.service.ParkingOccupancyService;
 import com.mpole.hana.digitaltwin.parking.service.ParkingQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -31,6 +33,7 @@ import java.time.OffsetDateTime;
 public class ParkingController {
 
     private final ParkingQueryService parkingQueryService;
+    private final ParkingOccupancyService parkingOccupancyService;
 
     @Operation(
             summary = "주차 건 목록",
@@ -44,7 +47,7 @@ public class ParkingController {
                     @Parameter(name = "date", description = "하루(KST). 예 2026-10-02. 있으면 from/to 무시", example = "2026-10-02"),
                     @Parameter(name = "from", description = "기간 시작(포함, ISO-8601)"),
                     @Parameter(name = "to", description = "기간 끝(미포함, ISO-8601)"),
-                    @Parameter(name = "carNo", description = "차량번호 부분 일치", example = "1397"),
+                    @Parameter(name = "carNo", description = "차량번호 부분 일치"),
                     @Parameter(name = "status", description = "PARKED(주차중) / EXITED(출차). 생략하면 전체")
             }
     )
@@ -78,5 +81,21 @@ public class ParkingController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
     ) {
         return ResponseEntity.ok(ApiResponse.success("주차 집계", parkingQueryService.summary(date, from, to)));
+    }
+
+    @Operation(
+            summary = "주차면 점유 현황 (층별)",
+            description = """
+                    주차면 센서 기준 전체·현재 주차·잔여 대수와 층별 내역. 화면의 Total / 현재 주차 대수 / 잔여 주차 대수에 그대로 쓴다.
+                    · 대상: 장비 분류 코드 PA-C, PA-D, PA-E, PA-R. 장비 1대 = 주차면 1칸
+                    · 상태: 현재값의 st — Y = 주차(parked), N = 빈자리(available), 값 없음·그 밖 = unknown
+                    · total = parked + available + unknown. 잔여는 N 인 칸만 센다(값 없는 센서는 빈자리로 치지 않음)
+                    · floors: 위층부터. 층 배치가 없는 센서는 floorId·floorName 이 null 인 한 줄로 맨 뒤
+                    · 입출차 기록(/sessions)과 무관하게 센서 현재값으로 계산한다
+                    """
+    )
+    @GetMapping("/occupancy")
+    public ResponseEntity<ApiResponse<ParkingOccupancy>> occupancy() {
+        return ResponseEntity.ok(ApiResponse.success("주차면 점유 현황", parkingOccupancyService.occupancy()));
     }
 }

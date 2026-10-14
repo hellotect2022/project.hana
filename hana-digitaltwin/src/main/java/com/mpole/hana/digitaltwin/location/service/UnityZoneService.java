@@ -1,10 +1,12 @@
 package com.mpole.hana.digitaltwin.location.service;
 
 import com.mpole.hana.digitaltwin.location.dto.UnityFloorOptionResponse;
+import com.mpole.hana.digitaltwin.location.dto.UnityLocationResponse;
 import com.mpole.hana.digitaltwin.location.dto.UnityZoneAdminResponse;
 import com.mpole.hana.digitaltwin.location.dto.UnityZoneRequest;
 import com.mpole.hana.digitaltwin.location.entity.UnityLocFloor;
 import com.mpole.hana.digitaltwin.location.entity.UnityLocZone;
+import com.mpole.hana.digitaltwin.location.repository.UnityLocBuildingRepository;
 import com.mpole.hana.digitaltwin.location.repository.UnityLocFloorRepository;
 import com.mpole.hana.digitaltwin.location.repository.UnityLocZoneRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,9 +20,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UnityZoneService {
 
+    private final UnityLocBuildingRepository buildingRepository;
     private final UnityLocZoneRepository zoneRepository;
     private final UnityLocFloorRepository floorRepository;
     private final ZoneCascadeService zoneCascadeService;
+
+    @Transactional(readOnly = true)
+    public List<UnityLocationResponse> findUnityLocationTree() {
+        return buildingRepository.fetchAllWithFloorsAndZones().stream()
+                .map(UnityLocationResponse::from)
+                .toList();
+    }
+
+    public UnityLocZone getZoneReference(Long zoneId) {
+        return zoneRepository.getReferenceById(zoneId);
+    }
 
     /** 층 선택용 옵션 목록 */
     @Transactional(readOnly = true)

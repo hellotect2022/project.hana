@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.event.api;
 
 import com.mpole.hana.digitaltwin.event.dto.AlarmHistoryRow;
+import com.mpole.hana.digitaltwin.event.dto.AlarmHistorySearchRequest;
 import com.mpole.hana.digitaltwin.event.dto.AlarmHistoryStats;
 import com.mpole.hana.digitaltwin.event.dto.AlarmRuleOption;
 import com.mpole.hana.digitaltwin.event.dto.EventResponse;
@@ -50,77 +51,43 @@ public class EventController {
                     · **완료 여부 = ackedAt 존재 여부** (관제자 확인. 2026-10-02 기획 확정 — 알람을 닫는 유일한 행위)
                     · 클라이언트 기동 시 `completed=false` 로 미확인 알람을 복구한다. clearedAt(해소)·occurrenceCount(재발 횟수)는 참고값
                     · 각 행의 `simulated` 가 true 면 모의 이벤트(SOP 훈련, /api/event/simulate 로 발생·확인). `simulated` 필터로 모의만/실제만 (2026-10-07)
-                    """,
-            parameters = {
-                    @Parameter(name = "categoryId", description = "장비 카테고리. 대·중분류를 넘기면 하위 소분류 전체로 확장", example = "12"),
-                    @Parameter(name = "floorId", description = "층 ID(위치 필터)", example = "4"),
-                    @Parameter(name = "ruleId", description = "알람명(규칙) ID", example = "7"),
-                    @Parameter(name = "completed", description = "true=완료(확인됨), false=미완료(미확인), 생략=전체", example = "false"),
-                    @Parameter(name = "simulated", description = "true=모의(SOP 훈련)만, false=실제만, 생략=전체", example = "false"),
-                    @Parameter(name = "q", description = "검색어 — 알람명·장비명·장비키 부분일치(대소문자 무시)", example = "청소"),
-                    @Parameter(name = "level", description = "심각도(CAUTION/WARNING/CRITICAL)"),
-                    @Parameter(name = "deviceId", description = "특정 장비만"),
-                    @Parameter(name = "from", description = "발생시각 시작(ISO-8601). 화면 기본은 최근 7일"),
-                    @Parameter(name = "to", description = "발생시각 종료(ISO-8601)")
-            }
+                    · 2026-10-14 GET → POST. 조건은 본문(JSON)으로, `categoryIds` 는 여러 개 가능(각각 하위 소분류로 확장 후 합침)
+                    · 본문 생략·빈 객체 `{}` = 전체, page 기본 0, size 기본 20
+                    """
     )
-    @GetMapping("/history")
+    @PostMapping("/history")
     public ResponseEntity<ApiResponse<ApiResponse.PageResponse<AlarmHistoryRow>>> history(
-            @RequestParam(required = false) String level,
-            @RequestParam(required = false) Long ruleId,
-            @RequestParam(required = false) Long deviceId,
-            @RequestParam(required = false) Long floorId,
-            @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) Boolean completed,
-            @RequestParam(required = false) Boolean simulated,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestBody(required = false) AlarmHistorySearchRequest req
     ) {
+        AlarmHistorySearchRequest r = req != null ? req : EMPTY_SEARCH;
+        int page = r.page() != null ? r.page() : 0;
+        int size = r.size() != null ? r.size() : 20;
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "occurredAt"));
         Page<AlarmHistoryRow> result = eventService.getAlarmHistory(
-                level, ruleId, deviceId, floorId, categoryId, completed, simulated, q, from, to, pageable);
+                r.level(), r.ruleId(), r.deviceId(), r.floorId(), r.categoryIds(),
+                r.completed(), r.simulated(), r.q(), r.from(), r.to(), pageable);
         return ResponseEntity.ok(ApiResponse.success("알람 이력 조회", result));
     }
 
     @Operation(
             summary = "알람 이력 집계 (화면 상단 카드)",
-            description = "/history 와 같은 필터로 발행 이벤트 수·완료(확인)·미완료(미확인) 건수를 반환합니다. "
-                    + "표와 숫자가 같은 조건이어야 하므로 파라미터를 /history 와 똑같이 넘기세요(page/size/completed 제외).",
-            parameters = {
-                    @Parameter(name = "categoryId", description = "장비 카테고리(대·중분류는 하위 소분류로 확장)"),
-                    @Parameter(name = "floorId", description = "층 ID"),
-                    @Parameter(name = "ruleId", description = "알람명(규칙) ID"),
-                    @Parameter(name = "simulated", description = "true=모의(SOP 훈련)만, false=실제만, 생략=전체"),
-                    @Parameter(name = "q", description = "검색어 — 알람명·장비명·장비키 부분일치"),
-                    @Parameter(name = "level", description = "심각도"),
-                    @Parameter(name = "deviceId", description = "특정 장비만"),
-                    @Parameter(name = "from", description = "발생시각 시작(ISO-8601)"),
-                    @Parameter(name = "to", description = "발생시각 종료(ISO-8601)")
-            }
+            description = "/history 와 같은 조건으로 발행 이벤트 수·완료(확인)·미완료(미확인) 건수를 반환합니다. "
+                    + "표와 숫자가 같은 조건이어야 하므로 본문을 /history 와 똑같이 넘기세요(page/size/completed 는 무시). "
+                    + "2026-10-14 GET → POST, categoryIds 여러 개 가능."
     )
-    @GetMapping("/history/stats")
+    @PostMapping("/history/stats")
     public ResponseEntity<ApiResponse<AlarmHistoryStats>> historyStats(
-            @RequestParam(required = false) String level,
-            @RequestParam(required = false) Long ruleId,
-            @RequestParam(required = false) Long deviceId,
-            @RequestParam(required = false) Long floorId,
-            @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) Boolean simulated,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestBody(required = false) AlarmHistorySearchRequest req
     ) {
+        AlarmHistorySearchRequest r = req != null ? req : EMPTY_SEARCH;
         AlarmHistoryStats stats = eventService.getAlarmHistoryStats(
-                level, ruleId, deviceId, floorId, categoryId, simulated, q, from, to);
+                r.level(), r.ruleId(), r.deviceId(), r.floorId(), r.categoryIds(),
+                r.simulated(), r.q(), r.from(), r.to());
         return ResponseEntity.ok(ApiResponse.success("알람 이력 집계", stats));
     }
+
+    private static final AlarmHistorySearchRequest EMPTY_SEARCH = new AlarmHistorySearchRequest(
+            null, null, null, null, null, null, null, null, null, null, null, null);
 
     @Operation(
             summary = "알람명 목록 (드롭다운)",

@@ -16,7 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -41,17 +44,17 @@ public class EventService {
      * <p>전력감시·엘리베이터·소방방재·태양광·출입통제·화장실 물리버튼 화면이 모두 이 하나를 쓴다.
      * 화면마다 다른 건 제목과 고정 필터뿐이다.</p>
      *
-     * @param categoryId 소분류가 아니어도 된다 — 대·중분류를 넘기면 하위 소분류 전체로 확장한다
-     * @param completed  true=완료(확인됨), false=미완료(미확인), null=전체 (판정 기준은 {@code ackedAt}, 2026-10-02 확정)
-     * @param q          검색어 — 알람명·장비명·장비키 부분일치(대소문자 무시). 2026-10-01 추가
-     * @param simulated  true=모의(SOP 훈련)만, false=실제만, null=전체. 2026-10-07 추가
+     * @param categoryIds 여러 개 가능, 소분류가 아니어도 된다 — 각각 하위 소분류 전체로 확장해 합친다. null·빈 목록 = 전체 (2026-10-14)
+     * @param completed   true=완료(확인됨), false=미완료(미확인), null=전체 (판정 기준은 {@code ackedAt}, 2026-10-02 확정)
+     * @param q           검색어 — 알람명·장비명·장비키 부분일치(대소문자 무시). 2026-10-01 추가
+     * @param simulated   true=모의(SOP 훈련)만, false=실제만, null=전체. 2026-10-07 추가
      */
     public Page<AlarmHistoryRow> getAlarmHistory(
             String level,
             Long ruleId,
             Long deviceId,
             Long floorId,
-            Long categoryId,
+            List<Long> categoryIds,
             Boolean completed,
             Boolean simulated,
             String q,
@@ -59,17 +62,15 @@ public class EventService {
             OffsetDateTime to,
             Pageable pageable
     ) {
-        List<Long> categoryIds = (categoryId == null)
-                ? null
-                : deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(categoryId);
+        List<Long> smallIds = expandCategories(categoryIds);
 
         // 하위 소분류가 하나도 없으면 결과도 없다. 빈 목록을 IN 절에 넘기면 SQL 문법 오류가 난다.
-        if (categoryIds != null && categoryIds.isEmpty()) {
+        if (smallIds != null && smallIds.isEmpty()) {
             return Page.empty(pageable);
         }
 
         return eventRepository.searchAlarmHistory(
-                level, ruleId, deviceId, floorId, categoryIds, completed, simulated, likeOf(q), from, to, pageable);
+                level, ruleId, deviceId, floorId, smallIds, completed, simulated, likeOf(q), from, to, pageable);
     }
 
     /** 이력 화면 상단 집계 — {@link #getAlarmHistory} 와 같은 필터로 전체/완료/미완료 건수. */
@@ -78,25 +79,38 @@ public class EventService {
             Long ruleId,
             Long deviceId,
             Long floorId,
-            Long categoryId,
+            List<Long> categoryIds,
             Boolean simulated,
             String q,
             OffsetDateTime from,
             OffsetDateTime to
     ) {
-        List<Long> categoryIds = (categoryId == null)
-                ? null
-                : deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(categoryId);
-        if (categoryIds != null && categoryIds.isEmpty()) {
+        List<Long> smallIds = expandCategories(categoryIds);
+        if (smallIds != null && smallIds.isEmpty()) {
             return AlarmHistoryStats.of(0, 0);
         }
         Object[] row = eventRepository.countAlarmHistory(
-                level, ruleId, deviceId, floorId, categoryIds, simulated, likeOf(q), from, to);
+                level, ruleId, deviceId, floorId, smallIds, simulated, likeOf(q), from, to);
         // 집계 쿼리는 항상 1행이지만 JPA 가 Object[] 안에 Object[] 를 한 겹 더 싸서 줄 때가 있다.
         Object[] cells = (row.length == 1 && row[0] instanceof Object[] inner) ? inner : row;
         long total = cells[0] == null ? 0 : ((Number) cells[0]).longValue();
         long completed = cells[1] == null ? 0 : ((Number) cells[1]).longValue();
         return AlarmHistoryStats.of(total, completed);
+    }
+
+    /**
+     * 카테고리 id 목록 → 하위 소분류 id 합집합(중복 제거).
+     * null·빈 목록이면 null(필터 없음). 결과가 빈 목록이면 "해당 소분류 없음" → 호출부가 0건 처리.
+     */
+    private List<Long> expandCategories(List<Long> categoryIds) {
+        if (categoryIds == null) return null;
+        List<Long> ids = categoryIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return null;
+        Set<Long> small = new LinkedHashSet<>();
+        for (Long id : ids) {
+            small.addAll(deviceCategoryCascadeService.resolveSmallCategoryIdsForFilter(id));
+        }
+        return new ArrayList<>(small);
     }
 
     /** 검색어 → JPQL LIKE 패턴(소문자, 양쪽 %). 비어 있으면 null → 조건에서 제외. */

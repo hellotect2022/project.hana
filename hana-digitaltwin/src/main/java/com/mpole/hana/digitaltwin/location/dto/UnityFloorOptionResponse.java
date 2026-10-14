@@ -8,10 +8,11 @@ public record UnityFloorOptionResponse(
         Integer floorNum,
         /** 표시 정렬 순서. 0 = 최하층(B7F) → 24 = PH2F. 목록은 이미 이 순서다. */
         Integer sortOrder,
-        String floorName
+        String floorName,
+        String description
 ) {
     public static UnityFloorOptionResponse from(UnityLocFloor floor) {
         return new UnityFloorOptionResponse(
-                floor.getFloorId(), floor.getFloorNum(), floor.getSortOrder(), floor.getFloorName());
+                floor.getFloorId(), floor.getFloorNum(), floor.getSortOrder(), floor.getFloorName(), floor.getDescription());
     }
 }
