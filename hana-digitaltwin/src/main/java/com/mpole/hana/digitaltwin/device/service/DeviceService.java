@@ -412,7 +412,7 @@ public class DeviceService {
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
-
+ 
     @Transactional
     public void saveTagMappingsByDevice(Long deviceId, Map<String, String> mappings) {
         if (!deviceRepository.existsById(deviceId)) {
