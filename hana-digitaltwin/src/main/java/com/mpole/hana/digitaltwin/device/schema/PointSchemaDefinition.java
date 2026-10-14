@@ -23,7 +23,17 @@ public record PointSchemaDefinition(
         boolean isDisplay,
         String dataSource,
         Integer sortOrder,
-        Boolean hud
+        Boolean hud,
+        /*
+         * 2026-10-12 저장 설정 3종 — 관리자 화면(카테고리 관리 → 포인트 스키마 "고급")에서 편집.
+         *   accumulate  누적 포인트(누적 전력량 등). true 면 event 서버가 5분 스냅샷(tbl_energy_snapshot)을 찍고 금일·금월 계산 대상
+         *   scale       배율. event 서버가 Kafka 수신 직후 원본 × scale 로 바꿔 저장·평가·전송한다(원본은 남지 않음). null/1 = 그대로
+         *   historyMode 값 이력 저장 방식. CHANGE(기본, 변화 시) / NONE(저장 안 함). 포인트 단위 이력(후속 단계)에서 사용
+         * 없는 기존 JSONB 는 null 로 들어오며 각각 false · 1 · CHANGE 로 본다.
+         */
+        Boolean accumulate,
+        Double scale,
+        String historyMode
 ) {
     @JsonCreator
     public PointSchemaDefinition {

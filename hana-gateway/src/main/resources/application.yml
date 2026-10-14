@@ -39,6 +39,15 @@ storage:
     # true = 128행씩 나눠 받음(행 수만큼 왕복 발생). 기본 false.
     prefer-cursored-execution: false
 
+  # 주차 시스템 MSSQL(DRPKDBV5) — 입차·출차 프로시저 호출 전용(2026-10-13). 수집용 mssql 과 별개 서버·DB.
+  # 계정은 코드·yml 에 두지 않고 환경 변수로 받는다(PARKING_MSSQL_USER / PARKING_MSSQL_PASSWORD).
+  parking-mssql:
+    host: ${PARKING_MSSQL_HOST:100.78.173.16}
+    port: ${PARKING_MSSQL_PORT:15433}
+    database: ${PARKING_MSSQL_DB:DRPKDBV5}
+    user: ${PARKING_MSSQL_USER:SI}
+    password: ${PARKING_MSSQL_PASSWORD:SYSTEM}
+
   postgres:
     driver: "postgresql"
     host: 192.168.250.88
@@ -75,6 +84,15 @@ hdt:
       # ⚠ 미확인: 원시 상태코드 → ConnectionState. 1/2/3 각각의 의미가 확인되면 채울 것.
       #   (매핑에 없는 코드는 UNKNOWN 으로 처리된다 — 미지의 코드가 '정상'으로 둔갑하지 않게)
       state-map: {"1": NORMAL, "2": ABNORMAL, "3": DISCONNECTED}
+
+  # 주차 입차·출차 적재(2026-10-13) — 주차 MSSQL 프로시저 → PostgreSQL tbl_parking_in/out. Kafka 안 거침
+  parking:
+    enabled: true
+    fixed-delay-ms: 300000                # 5분 — 앞 회차가 끝난 뒤부터 셈(겹쳐 돌지 않음)
+    in-procedure: UP_SearchInCarinfo      # 입차. 인자 'yyyyMMdd'
+    out-procedure: UP_SearchoutCarinfo    # 출차. 인자 'yyyyMMdd'(출차일 기준)
+    previous-day-window: 30m              # 자정 후 30분 동안은 어제 날짜도 한 번 더(자정 직전 출차 누락 보정). 0m 이면 끔
+    block-timeout: 200s                    # 한 회차 상한. 넘으면 포기하고 다음 주기 재시도
 
   kafka:
     topic:

@@ -237,10 +237,32 @@ public class DevicePointSchemaSyncService {
                     item.isDisplay(),
                     item.dataSource(),
                     item.sortOrderOr(result.size()),
-                    item.hud()
+                    item.hud(),
+                    // 2026-10-12 저장 설정 — 여기서 빠뜨리면 화면에서 저장할 때마다 값이 지워진다
+                    Boolean.TRUE.equals(item.accumulate()) ? Boolean.TRUE : null,
+                    normalizeScale(item.scale()),
+                    normalizeHistoryMode(item.historyMode())
             ));
         }
         return result;
+    }
+
+    /** 배율 — null·1 은 "그대로" 라 저장하지 않는다(null). 0 이하는 값을 지워 버리므로 거절. */
+    private static Double normalizeScale(Double scale) {
+        if (scale == null || scale == 1.0d) return null;
+        if (scale <= 0 || scale.isNaN() || scale.isInfinite()) {
+            throw new IllegalArgumentException("배율(scale)은 0보다 큰 숫자여야 합니다. 받은 값=" + scale);
+        }
+        return scale;
+    }
+
+    /** 이력 저장 방식 — CHANGE(기본, null 로 저장) / NONE. 그 외 값은 거절. */
+    private static String normalizeHistoryMode(String mode) {
+        if (mode == null || mode.isBlank()) return null;
+        String m = mode.trim().toUpperCase();
+        if ("CHANGE".equals(m)) return null;
+        if ("NONE".equals(m)) return m;
+        throw new IllegalArgumentException("이력 저장(historyMode)은 CHANGE 또는 NONE 입니다. 받은 값=" + mode);
     }
 
     private static Map<String, PointSchemaDefinition> indexByTagName(List<PointSchemaDefinition> list) {

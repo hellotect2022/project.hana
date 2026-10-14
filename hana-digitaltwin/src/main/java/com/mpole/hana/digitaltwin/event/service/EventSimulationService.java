@@ -26,6 +26,7 @@ import com.mpole.hana.digitaltwin.event.repository.EventRepository;
 import com.mpole.hana.digitaltwin.event.repository.EventRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,6 +78,8 @@ public class EventSimulationService {
     private final DevicePointRepository devicePointRepository;
     private final DeviceCategoryRepository deviceCategoryRepository;
     private final DeviceCategoryCascadeService categoryCascadeService;
+
+    private final ApplicationEventPublisher eventPublisher;
     private final EventControlExecutor controlExecutor;
 
     /** 드롭다운 — 모의 전용 규칙 전부(활성 여부 무관). 코드가 비어 있는 규칙은 고를 수 없으므로 제외. */
@@ -120,6 +123,9 @@ public class EventSimulationService {
                 .sorted()
                 .toList();
     }
+
+
+    public record SimulatedControlRequested(Event e, ControlTrigger trigger) { }
 
     /** 발생. 같은 규칙+장비+포인트에 열린 모의 행이 있으면 새로 만들지 않고 그 행을 {@code alreadyActive=true} 로 돌려준다. */
     @Transactional
@@ -183,7 +189,10 @@ public class EventSimulationService {
         log.info("[EventSimulation] 모의 이벤트 발생. eventId={}, eventCode={}, ruleId={}, deviceId={}, pointId={}, level={}, by={}",
                 e.getEventId(), eventCode, rule.getRuleId(), device.getDeviceId(), point.getPointId(), e.getLevel(), userId);
         // 발생 시점 디바이스 제어(2026-10-12) — 모의라 장비는 움직이지 않고 "실행했을 목록" 만 로그로 남는다.
-        controlExecutor.execute(e, ControlTrigger.ON_OCCUR);
+        //controlExecutor.execute(e, ControlTrigger.ON_OCCUR); // transactional 때문에 제어에러시 전체 에러가 발생
+        eventPublisher.publishEvent(new SimulatedControlRequested(e,ControlTrigger.ON_OCCUR));
+
+
         return SimulateResponse.of(e, device.getDeviceName(), false);
     }
 
@@ -209,7 +218,8 @@ public class EventSimulationService {
         if (updated > 0) {
             log.info("[EventSimulation] 모의 이벤트 확인(종료). eventId={}, by={}", eventId, userId);
             // 확인 시점 디바이스 제어(2026-10-12) — 최초 확인 때만. 모의라 로그만 남는다.
-            controlExecutor.execute(after, ControlTrigger.ON_ACK);
+            //controlExecutor.execute(after, ControlTrigger.ON_ACK);
+            eventPublisher.publishEvent(new SimulatedControlRequested(after,ControlTrigger.ON_ACK));
         }
         return new AckResponse(eventId, after.getAckedAt(), after.getAckedBy(), after.getClearedAt(), updated == 0);
     }

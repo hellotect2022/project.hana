@@ -51,7 +51,8 @@ public final class PointSchemaIndex {
             // sortOrder 가 없던 시절 데이터는 배열 순서가 곧 의도한 순서다.
             PointSchemaDefinition resolved = d.sortOrder() != null ? d : new PointSchemaDefinition(
                     d.tagName(), d.type(), d.unit(), d.tagDesc(), d.tagDisplayName(),
-                    d.isDisplay(), d.dataSource(), i, d.hud());
+                    d.isDisplay(), d.dataSource(), i, d.hud(),
+                    d.accumulate(), d.scale(), d.historyMode());
             // 같은 tagName 이 둘이면 앞선 것을 남긴다(스키마 입력 오류 — 순서를 뒤집지 않는다).
             map.putIfAbsent(resolved.tagName().trim(), resolved);
         }

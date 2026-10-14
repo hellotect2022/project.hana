@@ -3,6 +3,7 @@ package com.mpole.hana.event.consumer;
 import com.mpole.hana.common.dto.DeviceBundle;
 import com.mpole.hana.common.dto.XnPointData;
 import com.mpole.hana.event.config.sink.ReactiveQueue;
+import com.mpole.hana.event.pipeline.energy.PointMetaCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.SmartLifecycle;
@@ -26,6 +27,7 @@ public class View01KafkaConsumer implements SmartLifecycle {
     private final KafkaReceiver<String, Object> view01KafkaReceiver;
     //private final Sinks.Many<List<DeviceBundle>> centralSink;
     private final ReactiveQueue reactiveQueue;
+    private final PointMetaCache pointMetaCache;
 
     AtomicLong lastReceiveTime = new AtomicLong(0);
 
@@ -80,7 +82,9 @@ public class View01KafkaConsumer implements SmartLifecycle {
             return;
         }
 
-        var result = reactiveQueue.emitDeviceBundle(bundles);
+        // 2026-10-12: 카테고리 스키마 배율(scale) 을 수신 직후 여기 한 곳에서 적용한다.
+        // 이후 현재값·값 이력·이벤트 평가·웹소켓·5분 스냅샷이 모두 같은 배율 적용값을 쓴다(원본은 저장하지 않음 — 사용자 결정).
+        var result = reactiveQueue.emitDeviceBundle(pointMetaCache.applyScale(bundles));
 
         if (result.isFailure()) {
             log.warn("Event pipeline emit failed. result={}, size={}", result, bundles.size());

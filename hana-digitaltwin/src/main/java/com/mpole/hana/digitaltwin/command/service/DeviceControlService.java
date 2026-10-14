@@ -55,11 +55,8 @@ public class DeviceControlService {
         DevicePoint point = cmd.getPoint();
         String refDeviceCode = point != null ? point.getRefDeviceCode() : null;
         String refPointCode = point != null ? point.getRefPointCode() : null;
-        if (refDeviceCode == null || refDeviceCode.isBlank()
-                || refPointCode == null || refPointCode.isBlank()) {
-            throw new IllegalStateException(
-                    "제어 포인트에 SI 매핑(ref_device_code/ref_point_code)이 없습니다. commandPointId="
-                            + req.commandPointId());
+        if (refDeviceCode == null || refDeviceCode.isBlank() || refPointCode == null || refPointCode.isBlank()) {
+            throw new IllegalStateException("제어 포인트에 SI 매핑(ref_device_code/ref_point_code)이 없습니다. commandPointId=" + req.commandPointId());
         }
 
         String sendValue = resolveSendValue(cmd, req.value());

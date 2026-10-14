@@ -93,4 +93,34 @@ public class DatabaseConfig {
     public DatabaseClient postgresDatabaseClient(@Qualifier("postgresConnectionFactory") ConnectionFactory factory) {
         return DatabaseClient.create(factory);
     }
+
+    /* ───────────── 주차 시스템 MSSQL(DRPKDBV5) — 입차·출차 프로시저 호출 전용 (2026-10-13) ─────────────
+     * 수집용 MSSQL(SI 뷰)과 서버·DB 가 다르고 용도도 다르다(5분에 한 번 프로시저 2개). 그래서 연결을 따로 둔다.
+     * 커넥션은 호출할 때만 열고 닫는다(풀 없음) — 5분 주기라 상시 연결을 들고 있을 이유가 없다.
+     * 접속 정보는 환경 변수(PARKING_MSSQL_*)로 받는다. 비어 있어도 빈 생성은 되고, 실제 호출 때 실패 로그만 남는다.
+     */
+    @Value("${storage.parking-mssql.host}") String parkingHost;
+    @Value("${storage.parking-mssql.port}") int parkingPort;
+    @Value("${storage.parking-mssql.user}") String parkingUser;
+    @Value("${storage.parking-mssql.password}") String parkingPassword;
+    @Value("${storage.parking-mssql.database}") String parkingDatabase;
+
+    @Bean
+    public ConnectionFactory parkingMssqlConnectionFactory() {
+        MssqlConnectionConfiguration configuration = MssqlConnectionConfiguration.builder()
+                .host(parkingHost)
+                .port(parkingPort)
+                .username(parkingUser)
+                .password(parkingPassword)
+                .database(parkingDatabase)
+                // 결과가 수백 행이라 커서로 나눠 받을 이유가 없다 — 한 번에 스트리밍
+                .preferCursoredExecution(false)
+                .build();
+        return new MssqlConnectionFactory(configuration);
+    }
+
+    @Bean
+    public DatabaseClient parkingMssqlDatabaseClient(@Qualifier("parkingMssqlConnectionFactory") ConnectionFactory factory) {
+        return DatabaseClient.create(factory);
+    }
 }

@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.location.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Comment;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +49,14 @@ public class UnityLocFloor {
      */
     @Column(name = "sort_order")
     private Integer sortOrder;
+
+    /**
+     * 층 설명 — 입주사·용도(예: 6F = 하나은행, B2F = 주차장). 2026-10-14.
+     * <p>로케이션 정보 조회({@code GET /api/device/location-info})에서만 내려준다. 층 선택 목록 등 다른 응답에는 넣지 않는다.</p>
+     */
+    @Column(name = "description", length = 500)
+    @Comment("층 설명(입주사·용도). 예 6F = 하나은행, B2F = 주차장. 로케이션 정보 조회에서만 노출")
+    private String description;
 
     @OneToMany(mappedBy = "floor", fetch = FetchType.LAZY)
     @Builder.Default

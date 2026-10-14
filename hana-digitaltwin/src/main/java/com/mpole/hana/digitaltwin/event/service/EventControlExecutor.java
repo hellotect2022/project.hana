@@ -12,6 +12,8 @@ import com.mpole.hana.digitaltwin.event.repository.EventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +50,16 @@ public class EventControlExecutor {
         return execute(event, trigger);
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void on(EventSimulationService.SimulatedControlRequested req) {
+        try {
+            execute(req.e(), req.trigger());
+        } catch (Exception e) {
+            // 실행기는 항목별로 예외를 삼키므로 여기 오는 건 이벤트 재조회 실패 같은 예외적인 경우뿐
+            log.error("[EventControl] 비동기 제어 실패. eventId={}, trigger={}: {}", req.e().getEventId(), req.trigger(), e.getMessage());
+        }
+    }
+
     /** 이벤트 행으로 실행. 모의 이벤트면 실제 제어 없이 로그만. */
     public EventControlResult execute(Event event, ControlTrigger trigger) {
         OutputSpec out = event.getOutputs();
@@ -60,16 +72,15 @@ public class EventControlExecutor {
         }
 
         for (DeviceControlOutput c : controls) {
-            if (event.isSimulated()) {
-                // 모의 이벤트는 장비를 실제로 움직이지 않는다(훈련 중 배연창이 열리면 안 된다). 무엇을 했을지만 남긴다.
-                log.info("[EventControl] 모의 이벤트 — 제어 생략(로그만). eventId={}, trigger={}, commandPointId={}, value={}",
-                        event.getEventId(), trigger, c.commandPointId(), c.value());
-                items.add(new EventControlResult.Item(c.commandPointId(), c.value(), false, false, "모의 이벤트 — 실행 생략"));
-                continue;
-            }
+//            if (event.isSimulated()) {
+//                // 모의 이벤트는 장비를 실제로 움직이지 않는다(훈련 중 배연창이 열리면 안 된다). 무엇을 했을지만 남긴다.
+//                log.info("[EventControl] 모의 이벤트 — 제어 생략(로그만). eventId={}, trigger={}, commandPointId={}, value={}",
+//                        event.getEventId(), trigger, c.commandPointId(), c.value());
+//                items.add(new EventControlResult.Item(c.commandPointId(), c.value(), false, false, "모의 이벤트 — 실행 생략"));
+//                continue;
+//            }
             try {
-                DeviceControlResponse res = deviceControlService.control(
-                        DeviceControlRequest.builder().commandPointId(c.commandPointId()).value(c.value()).build());
+                DeviceControlResponse res = deviceControlService.control(DeviceControlRequest.builder().commandPointId(c.commandPointId()).value(c.value()).build());
                 log.info("[EventControl] 제어 실행 성공. eventId={}, trigger={}, commandPointId={}, value={}, msg={}",
                         event.getEventId(), trigger, c.commandPointId(), c.value(), res.message());
                 items.add(new EventControlResult.Item(c.commandPointId(), c.value(), true, true, res.message()));
