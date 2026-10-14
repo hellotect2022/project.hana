@@ -5,7 +5,7 @@ import com.mpole.hana.digitaltwin.device.dto.DevicePlacementResponse;
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DevicePlacement;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
-import com.mpole.hana.digitaltwin.location.service.LocationService;
+import com.mpole.hana.digitaltwin.location.service.UnityZoneService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DevicePlacementService {
     private final DeviceRepository deviceRepository;
-    private final LocationService locationService;
+    private final UnityZoneService unityZoneService;
 
     @Transactional
     public DevicePlacementResponse save(DevicePlacementRequest req) {
@@ -33,7 +33,7 @@ public class DevicePlacementService {
         }
 
         if (req.unityZoneId() != null) {
-            p.setUnityZone(locationService.getZoneReference(req.unityZoneId()));
+            p.setUnityZone(unityZoneService.getZoneReference(req.unityZoneId()));
         } else {
             p.setUnityZone(null);
         }

@@ -1,15 +1,9 @@
 package com.mpole.hana.digitaltwin.device.api;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.device.dto.*;
-import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
-import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
-import com.mpole.hana.digitaltwin.device.service.DevicePlacementService;
-import com.mpole.hana.digitaltwin.device.service.DevicePointMappingExcelService;
-import com.mpole.hana.digitaltwin.device.service.DeviceExcelService;
-import com.mpole.hana.digitaltwin.device.service.DeviceService;
+import com.mpole.hana.digitaltwin.device.service.*;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
-import com.mpole.hana.digitaltwin.location.dto.UnityLocationResponse;
-import com.mpole.hana.digitaltwin.location.service.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -33,9 +27,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import com.mpole.hana.common.constant.PointDataSource;
-import com.mpole.hana.digitaltwin.device.dto.PointDataSourceResponse;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -51,11 +42,9 @@ import java.util.Map;
 public class DeviceController {
 
     private final DeviceService deviceService;
-    private final DeviceCategoryService deviceCategoryService;
     private final DevicePlacementService devicePlacementService;
     private final DevicePointMappingExcelService devicePointMappingExcelService;
     private final DeviceExcelService deviceExcelService;
-    private final LocationService locationService;
 
     //region swagger 🔄 장비 및 포인트 저장 명세서
     @Operation(
