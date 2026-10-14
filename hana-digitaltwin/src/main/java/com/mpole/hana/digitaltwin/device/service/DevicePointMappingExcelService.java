@@ -1,9 +1,11 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.device.dto.DevicePointRefMappingRequest;
 import com.mpole.hana.digitaltwin.device.dto.PointMappingImportResult;
 import com.mpole.hana.digitaltwin.device.dto.PointMappingStatsResponse;
 import com.mpole.hana.digitaltwin.device.entity.Device;
+import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePoint;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,15 +42,27 @@ import java.util.Set;
 public class DevicePointMappingExcelService {
 
     private static final String COL_DEVICE_NAME = "장비명";
+    private static final String COL_DEVICE_DESC = "장비상세설명";
+    private static final String COL_CATEGORY = "카테고리";
     private static final String COL_TAG = "태그";
-    private static final String COL_POINT_NAME = "포인트명";
+    private static final String COL_POINT_NAME = "설명";
+    private static final String COL_POINT_DISPLAY_NAME = "표시명";
     private static final String COL_POINT_KEY = "point_key";
+    private static final String COL_POINT_TYPE = "유형";
+    private static final String COL_UNIT = "단위";
     private static final String COL_REF_DEVICE_CODE = "ref_device_code";
     private static final String COL_REF_POINT_CODE = "ref_point_code";
+    /**
+     * 값의 원천 수집 경로. 업로드에서는 <b>선택 컬럼</b>이다 —
+     * 컬럼이 없거나 셀이 비어 있으면 기존 값을 유지한다(비우지 않는다).
+     */
+    private static final String COL_DATA_SOURCE = "data_source";
 
+    // 업로드는 헤더 '이름'으로 컬럼을 찾으므로(추가 컬럼 무시) 표시용 컬럼을 늘려도 import 는 무영향.
     private static final String[] HEADERS = {
-            COL_DEVICE_NAME, COL_TAG, COL_POINT_NAME,
-            COL_POINT_KEY, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE
+            COL_DEVICE_NAME, COL_DEVICE_DESC, COL_CATEGORY, COL_TAG, COL_POINT_NAME, COL_POINT_DISPLAY_NAME,
+            COL_POINT_KEY, COL_POINT_TYPE, COL_UNIT, COL_REF_DEVICE_CODE, COL_REF_POINT_CODE,
+            COL_DATA_SOURCE
     };
 
     private final DevicePointRepository devicePointRepository;
@@ -99,11 +113,17 @@ public class DevicePointMappingExcelService {
                 Device device = p.getDevice();
                 Row row = sheet.createRow(rowIdx++);
                 row.createCell(0).setCellValue(device != null ? nvl(device.getDeviceName()) : "");
-                row.createCell(1).setCellValue(nvl(p.getTagName()));
-                row.createCell(2).setCellValue(nvl(p.getPointName()));
-                row.createCell(3).setCellValue(nvl(p.getPointKey()));
-                row.createCell(4).setCellValue(nvl(p.getRefDeviceCode()));
-                row.createCell(5).setCellValue(nvl(p.getRefPointCode()));
+                row.createCell(1).setCellValue(device != null ? nvl(device.getDescription()) : "");
+                row.createCell(2).setCellValue(categoryPath(device));
+                row.createCell(3).setCellValue(nvl(p.getTagName()));
+                row.createCell(4).setCellValue(nvl(p.getDescription()));
+                row.createCell(5).setCellValue(nvl(p.getPointDisplayName()));
+                row.createCell(6).setCellValue(nvl(p.getPointKey()));
+                row.createCell(7).setCellValue(nvl(p.getPointType()));
+                row.createCell(8).setCellValue(nvl(p.getUnit()));
+                row.createCell(9).setCellValue(nvl(p.getRefDeviceCode()));
+                row.createCell(10).setCellValue(nvl(p.getRefPointCode()));
+                row.createCell(11).setCellValue(p.getDataSource() != null ? p.getDataSource().name() : "");
             }
 
             for (int i = 0; i < HEADERS.length; i++) {
@@ -150,6 +170,9 @@ public class DevicePointMappingExcelService {
             int keyCol = colIndex.get(COL_POINT_KEY);
             int refDevCol = colIndex.get(COL_REF_DEVICE_CODE);
             int refPntCol = colIndex.get(COL_REF_POINT_CODE);
+            // 선택 컬럼 — 없으면 -1. 구버전 양식으로 업로드해도 그대로 동작한다.
+            Integer dataSourceColBoxed = colIndex.get(COL_DATA_SOURCE);
+            int dataSourceCol = dataSourceColBoxed != null ? dataSourceColBoxed : -1;
 
             for (int r = headerRow.getRowNum() + 1; r <= sheet.getLastRowNum(); r++) {
                 Row row = sheet.getRow(r);
@@ -159,12 +182,15 @@ public class DevicePointMappingExcelService {
                 String pointKey = trimToEmpty(readCell(row, keyCol, formatter));
                 String refDeviceCode = trimToEmpty(readCell(row, refDevCol, formatter));
                 String refPointCode = trimToEmpty(readCell(row, refPntCol, formatter));
+                String dataSource = dataSourceCol >= 0
+                        ? trimToEmpty(readCell(row, dataSourceCol, formatter))
+                        : "";
 
-                if (pointKey.isEmpty() && refDeviceCode.isEmpty() && refPointCode.isEmpty()) {
+                if (pointKey.isEmpty() && refDeviceCode.isEmpty() && refPointCode.isEmpty() && dataSource.isEmpty()) {
                     continue; // 완전 빈 행은 무시
                 }
                 // 사용자 표시용 행 번호(1-based)
-                parsedRows.add(new ParsedRow(r + 1, pointKey, refDeviceCode, refPointCode));
+                parsedRows.add(new ParsedRow(r + 1, pointKey, refDeviceCode, refPointCode, dataSource));
             }
         } catch (IOException e) {
             throw new IllegalArgumentException("엑셀 파일을 읽을 수 없습니다.", e);
@@ -192,8 +218,6 @@ public class DevicePointMappingExcelService {
         }
 
         List<DevicePointRefMappingRequest> valid = new ArrayList<>();
-        // 파일 내 ref 조합 중복 사전 차단
-        Set<String> seenRefInFile = new HashSet<>();
 
         for (ParsedRow pr : parsedRows) {
             if (pr.pointKey().isEmpty()) {
@@ -213,28 +237,23 @@ public class DevicePointMappingExcelService {
                 continue;
             }
 
-            if (hasDevice) {
-                String refKey = pr.refDeviceCode() + " " + pr.refPointCode();
-                if (!seenRefInFile.add(refKey)) {
-                    failed.add(fail(pr, "파일 내 중복된 SI 매핑입니다: "
-                            + pr.refDeviceCode() + ":" + pr.refPointCode()));
+            // 1:N 팬아웃 허용 — 같은 ref 조합을 여러 point 가 가질 수 있어 파일내/DB 조합중복 검사 제거(both-or-neither 유지)
+
+            // data_source 는 선택 입력 — 비어 있으면 null 로 넘겨 기존 값을 유지한다.
+            String dataSource = null;
+            if (!pr.dataSource().isEmpty()) {
+                if (PointDataSource.fromCode(pr.dataSource()) == null) {
+                    failed.add(fail(pr, "지원하지 않는 data_source 입니다: " + pr.dataSource()));
                     continue;
                 }
-                boolean dbDuplicate = devicePointRepository
-                        .findByRefDeviceCodeAndRefPointCodeAndPointIdNot(
-                                pr.refDeviceCode(), pr.refPointCode(), point.getPointId())
-                        .isPresent();
-                if (dbDuplicate) {
-                    failed.add(fail(pr, "이미 다른 포인트에 연결된 SI 매핑입니다: "
-                            + pr.refDeviceCode() + ":" + pr.refPointCode()));
-                    continue;
-                }
+                dataSource = pr.dataSource();
             }
 
             valid.add(new DevicePointRefMappingRequest(
                     point.getPointId(),
                     hasDevice ? pr.refDeviceCode() : null,
-                    hasPoint ? pr.refPointCode() : null
+                    hasPoint ? pr.refPointCode() : null,
+                    dataSource
             ));
         }
 
@@ -315,11 +334,30 @@ public class DevicePointMappingExcelService {
         return value == null ? "" : value;
     }
 
+    /** 장비 카테고리 경로("대 > 중 > 소"). 부모 체인을 거슬러 조립(readOnly 트랜잭션 내 lazy 로딩). */
+    private static String categoryPath(Device device) {
+        if (device == null || device.getCategory() == null) {
+            return "";
+        }
+        java.util.Deque<String> parts = new java.util.ArrayDeque<>();
+        DeviceCategory cur = device.getCategory();
+        int guard = 0;
+        while (cur != null && guard++ < 8) {
+            if (cur.getCategoryName() != null) {
+                parts.addFirst(cur.getCategoryName());
+            }
+            cur = cur.getParent();
+        }
+        return String.join(" > ", parts);
+    }
+
     private record ParsedRow(
             int rowNumber,
             String pointKey,
             String refDeviceCode,
-            String refPointCode
+            String refPointCode,
+            /** 빈 문자열이면 "변경 없음"(기존 값 유지) */
+            String dataSource
     ) {
     }
 }

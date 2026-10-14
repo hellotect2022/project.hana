@@ -1,105 +1,222 @@
 package com.mpole.hana.digitaltwin.event.service;
 
-import com.mpole.hana.digitaltwin.event.dto.EventRuleDtos.EventRuleRequest;
-import com.mpole.hana.digitaltwin.event.dto.EventRuleDtos.EventRuleResponse;
-import com.mpole.hana.digitaltwin.event.entity.EventDisplayType;
+import com.mpole.hana.common.constant.SuppressMode;
+import com.mpole.hana.digitaltwin.event.dto.EventRuleLevelItem;
+import com.mpole.hana.digitaltwin.event.dto.EventRuleRequest;
+import com.mpole.hana.digitaltwin.event.dto.EventRuleResponse;
 import com.mpole.hana.digitaltwin.event.entity.EventRule;
+import com.mpole.hana.digitaltwin.event.entity.EventRuleLevel;
+import com.mpole.hana.digitaltwin.event.entity.RuleScope;
 import com.mpole.hana.digitaltwin.event.repository.EventRuleRepository;
-import com.mpole.hana.digitaltwin.sop.entity.SopTemplate;
-import com.mpole.hana.digitaltwin.sop.repository.SopTemplateRepository;
-import jakarta.persistence.EntityNotFoundException;
+import com.mpole.hana.digitaltwin.device.entity.Device;
+import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
+import com.mpole.hana.digitaltwin.device.repository.DeviceCategoryRepository;
+import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
+import java.util.Objects;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class EventRuleService {
 
-    private final EventRuleRepository ruleRepository;
-    private final SopTemplateRepository sopTemplateRepository;
+    private final EventRuleRepository eventRuleRepository;
+    private final DeviceRepository deviceRepository;
+    private final DeviceCategoryRepository deviceCategoryRepository;
+
+    public EventRuleResponse create(EventRuleRequest req) {
+        validate(req);
+        boolean simulated = Boolean.TRUE.equals(req.simulated());
+
+        EventRule rule = EventRule.builder()
+                .ruleName(req.ruleName())
+                .eventCode(normalizeEventCode(req.eventCode(), simulated))
+                .simulated(simulated)
+                .description(req.description())
+                .scope(req.scope())
+                .categoryId(req.categoryId())
+                .deviceId(req.deviceId())
+                .tagName(req.tagName())
+                .pointType(req.pointType())
+                .operator(req.operator())
+                .sustainSec(req.sustainSec())
+                .deadband(req.deadband())
+                .suppressMode(normalizeSuppressMode(req.suppressMode()))
+                .active(req.active() != null ? req.active() : Boolean.TRUE)
+                .build();
+
+        applyLevels(rule, req.levels());
+
+        EventRule saved = eventRuleRepository.save(rule);
+        log.info("이벤트 규칙 생성: ruleId={}, name={}", saved.getRuleId(), saved.getRuleName());
+        return toResponse(saved);
+    }
 
     @Transactional(readOnly = true)
-    public List<EventRuleResponse> findAll() {
-        return ruleRepository.findAllByOrderByRuleNameAsc().stream()
-                .map(EventRuleResponse::from)
+    public List<EventRuleResponse> list() {
+        return eventRuleRepository.findAllByOrderByRuleIdDesc().stream()
+                .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public EventRuleResponse findById(Long ruleId) {
-        return ruleRepository.findByIdWithSopTemplate(ruleId)
-                .map(EventRuleResponse::from)
-                .orElseThrow(() -> new EntityNotFoundException("이벤트 규칙을 찾을 수 없습니다."));
+    public EventRuleResponse get(Long id) {
+        return toResponse(findOrThrow(id));
     }
 
-    @Transactional(readOnly = true)
-    public List<EventRuleResponse> findByDevice(Long deviceId) {
-        return ruleRepository.findByDeviceIdOrderByRuleNameAsc(deviceId).stream()
-                .map(EventRuleResponse::from)
-                .toList();
+    public EventRuleResponse update(Long id, EventRuleRequest req) {
+        validate(req);
+
+        EventRule rule = findOrThrow(id);
+        boolean simulated = Boolean.TRUE.equals(req.simulated());
+        rule.setRuleName(req.ruleName());
+        rule.setEventCode(normalizeEventCode(req.eventCode(), simulated));
+        rule.setSimulated(simulated);
+        rule.setDescription(req.description());
+        rule.setScope(req.scope());
+        rule.setCategoryId(req.categoryId());
+        rule.setDeviceId(req.deviceId());
+        rule.setTagName(req.tagName());
+        rule.setPointType(req.pointType());
+        rule.setOperator(req.operator());
+        rule.setSustainSec(req.sustainSec());
+        rule.setDeadband(req.deadband());
+        rule.setSuppressMode(normalizeSuppressMode(req.suppressMode()));
+        rule.setActive(req.active() != null ? req.active() : Boolean.TRUE);
+
+        // 레벨 전체 교체 (orphanRemoval 로 기존 레벨 삭제)
+        rule.clearLevels();
+        applyLevels(rule, req.levels());
+
+        EventRule saved = eventRuleRepository.save(rule);
+        log.info("이벤트 규칙 수정: ruleId={}", saved.getRuleId());
+        return toResponse(saved);
     }
 
-    @Transactional(readOnly = true)
-    public List<EventRuleResponse> findBySeverity(String severity) {
-        return ruleRepository.findBySeverityOrderByRuleNameAsc(severity).stream()
-                .map(EventRuleResponse::from)
-                .toList();
+    public void delete(Long id) {
+        EventRule rule = findOrThrow(id);
+        eventRuleRepository.delete(rule);
+        log.info("이벤트 규칙 삭제: ruleId={}", id);
     }
 
-    @Transactional
-    public EventRuleResponse create(EventRuleRequest request) {
-        EventRule rule = mapToEntity(new EventRule(), request);
-        ruleRepository.save(rule);
-        return EventRuleResponse.from(rule);
+    private EventRule findOrThrow(Long id) {
+        return eventRuleRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("이벤트 규칙을 찾을 수 없습니다. id=" + id));
     }
 
-    @Transactional
-    public EventRuleResponse update(Long ruleId, EventRuleRequest request) {
-        EventRule rule = ruleRepository.findById(ruleId)
-                .orElseThrow(() -> new EntityNotFoundException("이벤트 규칙을 찾을 수 없습니다."));
-        mapToEntity(rule, request);
-        return EventRuleResponse.from(rule);
+    /**
+     * 소프트 참조(deviceId/categoryId)를 표시용 이름/경로로 resolve 해 응답을 만든다.
+     * 규칙은 관리 화면용으로 건수가 적어 규칙별 조회로 처리한다.
+     */
+    private EventRuleResponse toResponse(EventRule rule) {
+        String deviceName = null;
+        if (rule.getDeviceId() != null) {
+            deviceName = deviceRepository.findById(rule.getDeviceId())
+                    .map(Device::getDeviceName)
+                    .orElse(null);
+        }
+        return EventRuleResponse.from(rule, deviceName, buildCategoryPath(rule.getCategoryId()));
     }
 
-    @Transactional
-    public EventRuleResponse toggleActive(Long ruleId) {
-        EventRule rule = ruleRepository.findById(ruleId)
-                .orElseThrow(() -> new EntityNotFoundException("이벤트 규칙을 찾을 수 없습니다."));
-        rule.setActive(!Boolean.TRUE.equals(rule.getActive()));
-        return EventRuleResponse.from(rule);
+    /** categoryId 소분류에서 부모 체인을 거슬러 "대 › 중 › 소" 경로 문자열을 만든다. */
+    private String buildCategoryPath(Long categoryId) {
+        if (categoryId == null) return null;
+        DeviceCategory cat = deviceCategoryRepository.findById(categoryId).orElse(null);
+        if (cat == null) return null;
+        Deque<String> parts = new ArrayDeque<>();
+        DeviceCategory cur = cat;
+        int guard = 0;
+        while (cur != null && guard++ < 8) {
+            parts.addFirst(cur.getCategoryName());
+            cur = cur.getParent();
+        }
+        return String.join(" › ", parts);
     }
 
-    @Transactional
-    public void delete(Long ruleId) {
-        ruleRepository.deleteById(ruleId);
+    private void applyLevels(EventRule rule, List<EventRuleLevelItem> items) {
+        if (items == null) return;
+        for (EventRuleLevelItem item : items) {
+            EventRuleLevel level = EventRuleLevel.builder()
+                    .level(item.level())
+                    .thresholdValue(item.thresholdValue())
+                    .triggerValue(item.triggerValue())
+                    .icon(item.icon())
+                    .effect(item.effect())
+                    .displayOrder(item.displayOrder())
+                    .outputs(item.outputs())
+                    .build();
+            rule.addLevel(level);
+        }
     }
 
-    private EventRule mapToEntity(EventRule rule, EventRuleRequest request) {
-        rule.setRuleName(request.ruleName().trim());
-        rule.setDescription(request.description());
-        rule.setDeviceId(request.deviceId());
-        rule.setTagName(request.tagName());
-        rule.setConditions(request.conditions());
-        rule.setConditionLogic(request.conditionLogic() != null ? request.conditionLogic() : "AND");
-        rule.setSustainDurationSec(request.sustainDuration() != null ? request.sustainDuration() : 0);
-        rule.setCooldownSec(request.cooldown() != null ? request.cooldown() : 0);
-        rule.setSeverity(request.severity());
-        rule.setActions(request.actions());
-        EventDisplayType displayType = request.displayType() != null ? request.displayType() : EventDisplayType.SIMPLE;
-        rule.setDisplayType(displayType);
-        if (request.sopTemplateId() != null) {
-            SopTemplate template = sopTemplateRepository.findById(request.sopTemplateId())
-                    .orElseThrow(() -> new EntityNotFoundException("SOP 템플릿을 찾을 수 없습니다."));
-            rule.setSopTemplate(template);
+    /** 알람 종류 정리 — 미지정이면 UNTIL_ACKED(상태형 기본). 2026-10-02 WHILE_ACTIVE 삭제. */
+    private static SuppressMode normalizeSuppressMode(SuppressMode raw) {
+        return raw == null ? SuppressMode.UNTIL_ACKED : raw;
+    }
+
+    /** 모의 시나리오 전용 규칙의 이벤트 코드 접두어. 프론트(eventRuleService.SCENARIO_PREFIX)·모의 API 와 같은 값. */
+    public static final String SCENARIO_PREFIX = "SCENARIO_";
+
+    /**
+     * 이벤트 코드 정리 — 공백 제거, 대문자. 비어 있으면 null(웹소켓은 "EVENT" 로 나간다).
+     * 클라이언트가 문자열로 분기하므로 대소문자·공백 차이로 어긋나지 않게 서버에서 한 번 맞춘다.
+     *
+     * <p>모의 시나리오 전용({@code simulated})이면 코드가 필수이고 {@code SCENARIO_} 접두어를 강제한다(없으면 붙임) —
+     * 실제 알람 코드와 처음부터 다른 코드로 남겨 이력·Unity 분기에서 섞이지 않게 한다(2026-10-07).</p>
+     */
+    private static String normalizeEventCode(String raw, boolean simulated) {
+        String v = raw == null ? "" : raw.trim().toUpperCase();
+        if (v.isEmpty()) {
+            if (simulated) {
+                throw new IllegalArgumentException("모의 시나리오 전용 규칙은 이벤트 코드(eventCode)가 필수입니다. Unity 훈련 메뉴에 이 코드로 표시됩니다.");
+            }
+            return null;
+        }
+        if (simulated && !v.startsWith(SCENARIO_PREFIX)) {
+            v = SCENARIO_PREFIX + v;
+        }
+        return v;
+    }
+
+    private void validate(EventRuleRequest req) {
+        if (req.ruleName() == null || req.ruleName().isBlank()) {
+            throw new IllegalArgumentException("정책명(ruleName)은 필수입니다.");
+        }
+        if (req.scope() == null) {
+            throw new IllegalArgumentException("적용 범위(scope)는 필수입니다.");
+        }
+        if (req.scope() == RuleScope.CATEGORY && req.categoryId() == null) {
+            throw new IllegalArgumentException("scope=CATEGORY 인 경우 categoryId 는 필수입니다.");
+        }
+        if (req.scope() == RuleScope.DEVICE && req.deviceId() == null) {
+            throw new IllegalArgumentException("scope=DEVICE 인 경우 deviceId 는 필수입니다.");
+        }
+        if (req.operator() == null) {
+            throw new IllegalArgumentException("판정 연산자(operator)는 필수입니다.");
+        }
+        if (req.operator().isEquality()) {
+            boolean hasTrigger = req.levels() != null && req.levels().stream()
+                    .anyMatch(l -> l.triggerValue() != null && !l.triggerValue().replace(",", "").isBlank());
+            if (!hasTrigger) {
+                throw new IllegalArgumentException("operator=EQ 인 경우 하나 이상의 레벨에 triggerValue 가 필요합니다(여러 값은 쉼표 구분).");
+            }
         } else {
-            rule.setSopTemplate(null);
+            boolean hasThreshold = req.levels() != null && req.levels().stream()
+                    .anyMatch(l -> l.thresholdValue() != null);
+            if (!hasThreshold) {
+                throw new IllegalArgumentException("비교 연산자(GTE/LTE/GT/LT)인 경우 하나 이상의 레벨에 thresholdValue 가 필요합니다.");
+            }
         }
-        if (request.active() != null) {
-            rule.setActive(request.active());
+        if (req.levels() != null && req.levels().stream().anyMatch(l -> Objects.isNull(l.level()))) {
+            throw new IllegalArgumentException("각 레벨 항목의 level 값은 필수입니다.");
         }
-        return rule;
     }
 }

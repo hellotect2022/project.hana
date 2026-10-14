@@ -4,7 +4,8 @@ import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
 import com.mpole.hana.digitaltwin.device.entity.DevicePlacement;
 import com.mpole.hana.digitaltwin.device.property.DevicePropertyInfo;
-import com.mpole.hana.digitaltwin.realtime.dto.DeviceRealtimeResponse;
+import com.mpole.hana.digitaltwin.device.schema.PointSchemaIndex;
+import com.mpole.hana.digitaltwin.realtime.dto.DeviceCurrentValueResponse;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.unityAsset.entity.UnityAsset;
 
@@ -28,7 +29,7 @@ public record DeviceBySystemResponse(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         DevicePropertyInfo propertyInfo,
-        DeviceRealtimeResponse currentValue
+        DeviceCurrentValueResponse currentValue
 ) {
     public static DeviceBySystemResponse from(Device d) {
         DeviceCategory cat = d.getCategory();
@@ -52,7 +53,7 @@ public record DeviceBySystemResponse(
                 d.getCreatedAt(),
                 d.getUpdatedAt()
                 ,d.getPropertyInfo()
-                , DeviceRealtimeResponse.from(c)
+                , DeviceCurrentValueResponse.from(c, PointSchemaIndex.of(cat))
         );
     }
 

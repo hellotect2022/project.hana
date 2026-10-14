@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8888
 
 spring:
   application:
@@ -24,23 +24,33 @@ spring:
 storage:
   mssql:
     driver: "sqlserver"
+#    host: 100.78.173.16
+#    port: 11433
+#    user: DtMpole
+#    password: "mPole20261*"
+#    database: SI
+
     host: 192.168.250.180
     port: 1433
     user: sa
     password: "!Q2w3e4r"
     database: SI_HANAHQ_T
-#    driver: "postgresql"
-#    host: 192.168.250.249
-#    port: 5432
-#    user: testuser
-#    password: "1q2w3e"
-#    database: hdt
-#    schema: core
+    # 커서(sp_cursorfetch) 사용 여부. false = 한 번에 스트리밍(대용량 풀스캔에 유리),
+    # true = 128행씩 나눠 받음(행 수만큼 왕복 발생). 기본 false.
+    prefer-cursored-execution: false
+
+  # 주차 시스템 MSSQL(DRPKDBV5) — 입차·출차 프로시저 호출 전용(2026-10-13). 수집용 mssql 과 별개 서버·DB.
+  # 계정은 코드·yml 에 두지 않고 환경 변수로 받는다(PARKING_MSSQL_USER / PARKING_MSSQL_PASSWORD).
+  parking-mssql:
+    host: ${PARKING_MSSQL_HOST:100.78.173.16}
+    port: ${PARKING_MSSQL_PORT:15433}
+    database: ${PARKING_MSSQL_DB:DRPKDBV5}
+    user: ${PARKING_MSSQL_USER:SI}
+    password: ${PARKING_MSSQL_PASSWORD:SYSTEM}
 
   postgres:
     driver: "postgresql"
-    host: 192.168.250.181
-    #host: 192.168.250.249
+    host: 192.168.250.88
     port: 5432
     user: testuser
     password: "1q2w3e"
@@ -48,14 +58,46 @@ storage:
     schema: core
 
 hdt:
-  polling:
+  # 외부(SI) 뷰 테이블 연동 — 뷰 하나당 블록 하나. 뷰가 늘면 view03 블록을 추가한다.
+  dbview:
+    # 뷰 #01 — 관제점 값(vwDigitalTwin_01)
+    # 장비별 포인트 골격(tbl_device_point)을 메모리에 두고 뷰 값을 그 칸에 채운 뒤,
+    # 값이 바뀐 장비만 "전체 포인트"로 발행한다.
+    view01:
+      enabled: true
+      fixed-delay-ms: 1000                # 1초 — 값은 고빈도
+      table: vwDigitalTwin_01
+      meta-refresh-ms: 300000              # 골격(tbl_device_point) 리로드 주기. 값은 이월됨
+      block-timeout: 60s
+      publish-all-on-start: true          # 기동 직후 1회 전 장비 발행(하류 초기 동기화)
+
+    # 뷰 #02 — 중계기 네트워크 상태(vwDigitalTwin_02)
+    # ⚠ enabled=false 유지: state-map(1/2/3 의미)이 채워지기 전에는 켜지 말 것.
+    #    (컬럼명은 확정됨 — device_code / status)
+    view02:
+      enabled: false
+      fixed-delay-ms: 10000               # 10초 — 상태는 값보다 저빈도
+      table: vwDigitalTwin_02
+      code-column: device_code            # 중계기 식별 컬럼(= tbl_device_infra.ref_infra_code 와 매칭)
+      state-column: status                # 원시 상태 컬럼(1/2/3)
+      block-timeout: 30s
+      # ⚠ 미확인: 원시 상태코드 → ConnectionState. 1/2/3 각각의 의미가 확인되면 채울 것.
+      #   (매핑에 없는 코드는 UNKNOWN 으로 처리된다 — 미지의 코드가 '정상'으로 둔갑하지 않게)
+      state-map: {"1": NORMAL, "2": ABNORMAL, "3": DISCONNECTED}
+
+  # 주차 입차·출차 적재(2026-10-13) — 주차 MSSQL 프로시저 → PostgreSQL tbl_parking_in/out. Kafka 안 거침
+  parking:
     enabled: true
-    fixed-delay-ms: 1000
-    pipeline-block-timeout: 5s
+    fixed-delay-ms: 300000                # 5분 — 앞 회차가 끝난 뒤부터 셈(겹쳐 돌지 않음)
+    in-procedure: UP_SearchInCarinfo      # 입차. 인자 'yyyyMMdd'
+    out-procedure: UP_SearchoutCarinfo    # 출차. 인자 'yyyyMMdd'(출차일 기준)
+    previous-day-window: 30m              # 자정 후 30분 동안은 어제 날짜도 한 번 더(자정 직전 출차 누락 보정). 0m 이면 끔
+    block-timeout: 200s                    # 한 회차 상한. 넘으면 포기하고 다음 주기 재시도
 
   kafka:
     topic:
-      raw: test2
+      view01: view01                      # 뷰 #01 관제점 값(DeviceBundle) — event 쪽 동일 값 필요
+      view02: view02                      # 뷰 #02 중계기 상태(InfraStatus) — event 쪽 동일 값 필요
 
   ingestion:
     tcp:

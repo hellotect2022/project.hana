@@ -7,8 +7,12 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SopTemplateRepository extends JpaRepository<SopTemplate, Long> {
+
     boolean existsByTemplateCode(String templateCode);
+
     Optional<SopTemplate> findByTemplateCode(String templateCode);
-    List<SopTemplate> findByActiveTrueOrderByTemplateNameAsc();
+
     List<SopTemplate> findAllByOrderByTemplateNameAsc();
+
+    List<SopTemplate> findByActiveTrueOrderByTemplateNameAsc();
 }

@@ -42,6 +42,16 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // ── HQS 연동 ──────────────────────────────────────────────
+                        // 아래 "/api/**" permitAll 보다 반드시 위에 있어야 한다.
+                        // Spring Security 는 먼저 매칭된 규칙이 이기므로, 순서를 바꾸면
+                        // 이 규칙들이 통째로 무시되고 HQS API 가 다시 무인증으로 열린다.
+                        .requestMatchers("/api/v1/hqs/login/external").permitAll()   // 토큰 발급 — 인증 전 호출
+                        .requestMatchers("/api/v1/hqs/**").hasAnyRole("ADMIN", "HQS") // HQS 용
+                        // 모의 이벤트(SOP 시나리오 훈련, 2026-10-07) — 켤 때는 아래 주석을 풀고 "/api/**" permitAll 보다 위에 둔다.
+                        // 지금은 다른 /api/** 와 같이 무인증 통과(사용자 결정: 일단 권한 없이 전부 통과, 역할은 ADMIN·UNITY 예정).
+                        // .requestMatchers("/api/event/simulate/**").hasAnyRole("ADMIN", "UNITY")
+                        // ──────────────────────────────────────────────────────────
                         .requestMatchers(
                                 "/api/device-system/roles/**",
                                 "/api/auth/change-password",
@@ -50,6 +60,7 @@ public class SecurityConfig {
                                 ).authenticated()
                         .requestMatchers(
                                 "/api/**",
+                                "/internal/**",   // 서버 간 내부 API(event 서버 → 이벤트 연동 디바이스 제어, 2026-10-12). 외부 비노출 전제
                                 "/actuator/**",
                                 "/api/auth/login",
                                 "/api/auth/refresh",

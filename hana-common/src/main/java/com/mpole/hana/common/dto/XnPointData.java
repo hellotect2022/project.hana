@@ -14,10 +14,9 @@ public record XnPointData(
         String pointkey, // 우리쪽 DB 의 pointKey
         String deviceCode,
         String pointCode,
-        //@JsonProperty("pointkey") String pointKey,
         String alarmYn,
         String objectType,
-        String pointName,
+        String pointDisplayName, // 우리쪽 DB 의 pointDisplayName
         String valueRaw,
         String unit,
         String tagName,

@@ -13,11 +13,14 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonSubTypes({
         @JsonSubTypes.Type(value = CctvProperty.class, name = "CCTV"),
+        @JsonSubTypes.Type(value = ToiletBoothProperty.class, name = "TOILET_BOOTH"),
         @JsonSubTypes.Type(value = ChillerProperty.class, name = "CHILLER"),
         @JsonSubTypes.Type(value = GatewayProperty.class, name = "GATEWAY"),
         @JsonSubTypes.Type(value = GenericDeviceProperty.class, name = "GENERIC")
 })
 
-public sealed interface DevicePropertyInfo permits CctvProperty, ChillerProperty, GatewayProperty, GenericDeviceProperty  {
+public sealed interface DevicePropertyInfo
+        permits CctvProperty, ChillerProperty, GatewayProperty, GenericDeviceProperty, ToiletBoothProperty,
+                CctvPropertyResponse {
     DevicePropertyType propertyType();
 }

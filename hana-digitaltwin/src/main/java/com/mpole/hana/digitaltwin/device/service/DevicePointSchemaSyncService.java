@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.device.service;
 
+import com.mpole.hana.common.constant.PointDataSource;
 import com.mpole.hana.digitaltwin.device.repository.DevicePointRepository;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import lombok.RequiredArgsConstructor;
@@ -50,10 +51,13 @@ public class DevicePointSchemaSyncService {
         tagsToUpdate.retainAll(newTags);
         tagsToUpdate.removeAll(renamedOldTags);
 
+        // 삭제: 신 스키마에서 빠졌고 rename 도 아닌 태그 → 카테고리 내 해당 포인트 제거(검증 없음).
         if (!tagsToDelete.isEmpty()) {
             devicePointRepository.bulkDeleteByCategoryIdAndTagNameIn(categoryId, tagsToDelete);
         }
 
+        // 이름변경: old→new 매핑 태그. [검증] new point_key 충돌 없는지 확인 후 기존 행의 tag/키/속성 UPDATE.
+        //           (UPDATE 라 old 포인트가 없던 장비엔 생성 안 됨 → 아래 백필에서 보완.)
         for (Map.Entry<String, String> rename : renames.entrySet()) {
             String oldTag = rename.getKey();
             String newTag = rename.getValue();
@@ -67,12 +71,16 @@ public class DevicePointSchemaSyncService {
                     oldTag,
                     newTag,
                     resolvePointName(definition),
+                    definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
 
+        // 갱신: old·new 양쪽에 존재(동일명)하는 태그 → 기존 행의 속성(설명/표시명/타입/단위/활성) UPDATE.
+        //       (UPDATE 라 포인트가 없던 장비엔 생성 안 됨 → 아래 백필에서 보완.)
         for (String tagName : tagsToUpdate) {
             PointSchemaDefinition definition = newByTag.get(tagName);
             if (definition == null) {
@@ -82,12 +90,15 @@ public class DevicePointSchemaSyncService {
                     categoryId,
                     tagName,
                     resolvePointName(definition),
+                    definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
 
+        // 신규: 신 스키마에만 있는 태그. [검증] new point_key 충돌 없는지 확인 후, 태그 없는 카테고리 내 전 장비에 INSERT(NOT EXISTS).
         for (String tagName : tagsToInsert) {
             PointSchemaDefinition definition = newByTag.get(tagName);
             if (definition == null) {
@@ -98,9 +109,35 @@ public class DevicePointSchemaSyncService {
                     categoryId,
                     tagName,
                     resolvePointName(definition),
+                    definition.tagDisplayName(),
                     definition.type(),
                     definition.unit(),
-                    definition.isDisplay()
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
+            );
+        }
+
+        // 백필(정합 보장): rename/update 는 UPDATE 라 포인트가 누락된 장비엔 안 생긴다.
+        //   갱신·이름변경 대상 태그를 대상으로 NOT EXISTS INSERT 를 한 번 더 돌려, "카테고리 내 모든 장비가
+        //   현재 스키마의 모든 태그 포인트를 갖는다"를 멱등 보장한다. (tagsToInsert 는 위에서 이미 전수 생성됨)
+        Set<String> tagsToBackfill = new HashSet<>(tagsToUpdate);
+        tagsToBackfill.addAll(renamedNewTags);
+        for (String tagName : tagsToBackfill) {
+            PointSchemaDefinition definition = newByTag.get(tagName);
+            if (definition == null) {
+                continue;
+            }
+            // [검증] 누락 장비에 넣을 point_key 가 다른 태그로 이미 쓰이는지(진짜 충돌만 잡음, 보유 장비는 제외됨).
+            assertNoInsertKeyConflict(categoryId, tagName);
+            devicePointRepository.bulkInsertByCategoryIdAndTag(
+                    categoryId,
+                    tagName,
+                    resolvePointName(definition),
+                    definition.tagDisplayName(),
+                    definition.type(),
+                    definition.unit(),
+                    definition.isDisplay(),
+                    resolveDataSource(definition)
             );
         }
     }
@@ -124,6 +161,28 @@ public class DevicePointSchemaSyncService {
             return definition.tagDesc().trim();
         }
         return definition.tagName().trim();
+    }
+
+    /**
+     * 스키마의 원천 소스 코드를 검증해 반환한다.
+     *
+     * <p>비어 있으면 null 을 돌려주고, 쿼리 쪽 {@code COALESCE(:dataSource, p.data_source)} 가
+     * <b>기존 포인트 값을 유지</b>한다 — 소스를 지정하지 않은 스키마를 저장했다고 해서
+     * 매핑 화면에서 개별 지정한 AMQP/DERIVED 가 지워지면, 그 포인트가 VIEW01 로 간주되어
+     * gateway 기동 시 값이 null 로 덮인다. 되돌리려면 {@code VIEW01} 을 명시한다.</p>
+     */
+    private static String resolveDataSource(PointSchemaDefinition definition) {
+        String raw = definition.dataSource();
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        PointDataSource parsed = PointDataSource.fromCode(raw);
+        if (parsed == null) {
+            throw new IllegalArgumentException(
+                    "지원하지 않는 data_source 입니다: " + raw + " (tagName=" + definition.tagName() + ")"
+            );
+        }
+        return parsed.name();
     }
 
     /**
@@ -167,15 +226,43 @@ public class DevicePointSchemaSyncService {
             if (item == null || item.tagName() == null || item.tagName().isBlank()) {
                 continue;
             }
+            // sortOrder 가 비어 있으면 배열에 담긴 순서를 그대로 쓴다
+            // (이 필드 도입 전 데이터 — 지금 순서가 곧 의도한 순서다).
             result.add(new PointSchemaDefinition(
                     item.tagName().trim(),
                     item.type(),
                     item.unit(),
                     item.tagDesc(),
-                    item.isDisplay()
+                    item.tagDisplayName(),
+                    item.isDisplay(),
+                    item.dataSource(),
+                    item.sortOrderOr(result.size()),
+                    item.hud(),
+                    // 2026-10-12 저장 설정 — 여기서 빠뜨리면 화면에서 저장할 때마다 값이 지워진다
+                    Boolean.TRUE.equals(item.accumulate()) ? Boolean.TRUE : null,
+                    normalizeScale(item.scale()),
+                    normalizeHistoryMode(item.historyMode())
             ));
         }
         return result;
+    }
+
+    /** 배율 — null·1 은 "그대로" 라 저장하지 않는다(null). 0 이하는 값을 지워 버리므로 거절. */
+    private static Double normalizeScale(Double scale) {
+        if (scale == null || scale == 1.0d) return null;
+        if (scale <= 0 || scale.isNaN() || scale.isInfinite()) {
+            throw new IllegalArgumentException("배율(scale)은 0보다 큰 숫자여야 합니다. 받은 값=" + scale);
+        }
+        return scale;
+    }
+
+    /** 이력 저장 방식 — CHANGE(기본, null 로 저장) / NONE. 그 외 값은 거절. */
+    private static String normalizeHistoryMode(String mode) {
+        if (mode == null || mode.isBlank()) return null;
+        String m = mode.trim().toUpperCase();
+        if ("CHANGE".equals(m)) return null;
+        if ("NONE".equals(m)) return m;
+        throw new IllegalArgumentException("이력 저장(historyMode)은 CHANGE 또는 NONE 입니다. 받은 값=" + mode);
     }
 
     private static Map<String, PointSchemaDefinition> indexByTagName(List<PointSchemaDefinition> list) {

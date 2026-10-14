@@ -50,6 +50,9 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
                 OR LOWER(COALESCE(c.categoryName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR CONCAT('', d.deviceId) LIKE CONCAT('%', :keyword, '%'))
               AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
+              AND (:hasCommandPoint IS NULL OR :hasCommandPoint = FALSE
+                OR EXISTS (SELECT 1 FROM CommandPoint cp
+                            WHERE cp.device = d AND cp.active = TRUE))
             """,
             countQuery = """
             SELECT COUNT(DISTINCT d) FROM Device d
@@ -60,23 +63,43 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
                 OR LOWER(COALESCE(c.categoryName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR CONCAT('', d.deviceId) LIKE CONCAT('%', :keyword, '%'))
               AND (:categoryIds IS NULL OR c.categoryId IN :categoryIds)
+              AND (:hasCommandPoint IS NULL OR :hasCommandPoint = FALSE
+                OR EXISTS (SELECT 1 FROM CommandPoint cp
+                            WHERE cp.device = d AND cp.active = TRUE))
             """
     )
     Page<Device> searchDevices(
             @Param("keyword") String keyword,
             @Param("categoryIds") Collection<Long> categoryIds,
+            /**
+             * true 면 <b>활성 제어 포인트가 있는 장비만</b> 반환한다(디바이스 제어 화면 전용).
+             * null/false 면 조건에서 빠져 기존 동작 그대로다 — 다른 소비처는 영향받지 않는다.
+             * 클라이언트에서 거르면 페이지당 20건을 받아 몇 건만 남아 페이징이 깨지므로 서버에서 건다.
+             */
+            @Param("hasCommandPoint") Boolean hasCommandPoint,
             Pageable pageable
     );
 
+    /**
+     * 층·구역 기준 장비 조회.
+     *
+     * <p><b>구역은 단건이 아니라 목록을 받는다</b> — 구역에 계층이 생겨서(화장실 &gt; 부스)
+     * 화장실을 고르면 그 안 부스에 배치된 장비도 나와야 하기 때문이다.
+     * 호출부가 {@code ZoneCascadeService.resolveSubtreeZoneIds()} 로 펼쳐 넘긴다.</p>
+     *
+     * @param zoneIds null 이면 구역 필터 없음. <b>빈 목록을 넘기지 말 것</b> —
+     *                {@code IN ()} 은 SQL 오류다. 호출부에서 0건으로 단락시킨다
+     */
     @Query("""
         SELECT d FROM Device d
         LEFT JOIN FETCH d.placement p
         LEFT JOIN FETCH p.unityZone z
         WHERE (:floorId IS NULL OR z.floor.floorId = :floorId)
-          AND (:zoneId IS NULL OR z.zoneId = :zoneId)
+          AND (:zoneIds IS NULL OR z.zoneId IN :zoneIds)
         ORDER BY d.deviceId ASC
         """)
-    List<Device> fetchSearchDevices(@Param("floorId") Long floorId, @Param("zoneId") Long zoneId);
+    List<Device> fetchSearchDevices(@Param("floorId") Long floorId,
+                                    @Param("zoneIds") Collection<Long> zoneIds);
 
     @Query("""
             SELECT d 
@@ -100,8 +123,6 @@ public interface DeviceRepository extends JpaRepository<Device,Long> {
     Page<Device> fetchByCategoryIds(@Param("categoryIds") Collection<Long> categoryIds, Pageable pageable);
 
     long countByCategory_CategoryId(Long categoryId);
-
-    long countByUnityAsset_AssetId(Long assetId);
 
     boolean existsByDeviceKey(String deviceKey);
  

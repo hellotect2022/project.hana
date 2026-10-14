@@ -5,7 +5,7 @@ import com.mpole.hana.digitaltwin.location.entity.UnityLocZone;
 import com.mpole.hana.digitaltwin.space.entity.ZoneDisplayPolicy;
 
 public record ZoneDisplayPolicyResponse(
-        Long policyId,
+        Long ruleId,
         Long zoneId,
         String zoneName,
         String buildingName,
@@ -22,7 +22,7 @@ public record ZoneDisplayPolicyResponse(
         UnityLocZone zone = p.getZone();
         UnityLocFloor floor = zone != null ? zone.getFloor() : null;
         return new ZoneDisplayPolicyResponse(
-                p.getPolicyId(),
+                p.getRuleId(),
                 zone != null ? zone.getZoneId() : null,
                 zone != null ? zone.getZoneName() : null,
                 floor != null && floor.getBuilding() != null ? floor.getBuilding().getBuildingName() : null,

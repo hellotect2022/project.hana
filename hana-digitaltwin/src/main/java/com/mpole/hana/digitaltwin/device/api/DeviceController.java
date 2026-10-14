@@ -5,6 +5,7 @@ import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
 import com.mpole.hana.digitaltwin.device.service.DevicePlacementService;
 import com.mpole.hana.digitaltwin.device.service.DevicePointMappingExcelService;
+import com.mpole.hana.digitaltwin.device.service.DeviceExcelService;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import com.mpole.hana.digitaltwin.location.dto.UnityLocationResponse;
@@ -32,6 +33,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import com.mpole.hana.common.constant.PointDataSource;
+import com.mpole.hana.digitaltwin.device.dto.PointDataSourceResponse;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -49,6 +54,7 @@ public class DeviceController {
     private final DeviceCategoryService deviceCategoryService;
     private final DevicePlacementService devicePlacementService;
     private final DevicePointMappingExcelService devicePointMappingExcelService;
+    private final DeviceExcelService deviceExcelService;
     private final LocationService locationService;
 
     //region swagger 🔄 장비 및 포인트 저장 명세서
@@ -101,9 +107,11 @@ public class DeviceController {
     public ResponseEntity<ApiResponse<ApiResponse.PageResponse<DeviceResponse>>> getAllDevices(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long categoryId,
+            @Parameter(description = "true 면 활성 제어 포인트가 있는 장비만 반환(디바이스 제어 화면)")
+            @RequestParam(required = false) Boolean hasCommandPoint,
             @Parameter(hidden = true) @PageableDefault(size = 20, sort = "deviceId", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, pageable);
+        Page<DeviceResponse> devices = deviceService.getDevicesPage(keyword, categoryId, hasCommandPoint, pageable);
 
         return ResponseEntity.ok(ApiResponse.success("장비 목록 조회", devices));
     }
@@ -181,6 +189,31 @@ public class DeviceController {
                 .body(body);
     }
 
+    @Operation(
+            summary = "장비 목록 엑셀 다운로드",
+            description = "장비관리 목록을 xlsx 로 다운로드한다. 컬럼: 장비이름 / 표시명 / 설명 / 카테고리(경로) / 3D에셋명. "
+                    + "categoryId·keyword 로 현재 화면 필터와 동일 범위로 내려받는다.",
+            parameters = {
+                    @Parameter(name = "categoryId", description = "카테고리 ID 필터", required = false),
+                    @Parameter(name = "keyword", description = "검색 키워드(장비이름/카테고리/키)", required = false)
+            }
+    )
+    @GetMapping("/excel")
+    public ResponseEntity<byte[]> downloadDeviceListExcel(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String keyword
+    ) {
+        byte[] body = deviceExcelService.buildDeviceListExcel(categoryId, keyword);
+        String filename = URLEncoder.encode("device-list.xlsx", StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"device-list.xlsx\"; filename*=UTF-8''" + filename)
+                .body(body);
+    }
+
     //region swagger 🔄 포인트 매핑 엑셀 업로드 명세서
     @Operation(
             summary = "포인트 매핑 엑셀 업로드",
@@ -219,6 +252,26 @@ public class DeviceController {
     ) {
         PointMappingStatsResponse stats = devicePointMappingExcelService.getStats(categoryId, keyword);
         return ResponseEntity.ok(ApiResponse.success("포인트 매핑 통계", stats));
+    }
+
+    //region swagger 🔄 포인트 원천 소스 목록 명세서
+    @Operation(
+            summary = "포인트 원천 소스 목록",
+            description = """
+                    포인트 매핑 화면의 '원천 소스' 선택지를 반환합니다(드롭다운용).
+
+                    값을 지정하지 않은(null) 포인트는 하위호환으로 VIEW01 로 간주됩니다.
+                    RabbitMQ 로 채우는 포인트는 AMQP, 계산으로 채우는 포인트는 DERIVED 로 지정해야
+                    gateway 기동 시 값이 null 로 덮이지 않습니다.
+                    """
+    )
+    //endregion
+    @GetMapping("/points/data-sources")
+    public ResponseEntity<ApiResponse<List<PointDataSourceResponse>>> getPointDataSources() {
+        List<PointDataSourceResponse> sources = Arrays.stream(PointDataSource.values())
+                .map(PointDataSourceResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("포인트 원천 소스 목록", sources));
     }
 
     //region 🔄 장비 정보 수정 명세서
@@ -370,9 +423,20 @@ public class DeviceController {
     }
 
     @GetMapping("/{deviceId}/cctv-mapping")
-    public ResponseEntity<ApiResponse<List<CctvInfoProjection>>> getCctvMapping(
+    public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvMapping(
             @PathVariable Long deviceId) {
-        List<CctvInfoProjection> list = deviceService.getCctvDeviceMapping(deviceId);
+        List<CctvCameraResponse> list = deviceService.getCctvDeviceMapping(deviceId);
         return ResponseEntity.ok(ApiResponse.success("장비 주변 CCTV 매핑 조회", list));
+    }
+
+    @GetMapping("/cctv-candidates")
+    public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvCandidates() {
+        List<CctvCameraResponse> list = deviceService.getCctvCandidates();
+        return ResponseEntity.ok(ApiResponse.success("CCTV 매핑 후보 목록", list));
+    }
+
+    @GetMapping("/property-types")
+    public ResponseEntity<ApiResponse<List<DevicePropertyTypeResponse>>> getPropertyTypes() {
+        return ResponseEntity.ok(ApiResponse.success("장비 property 타입 메타", deviceService.getPropertyTypes()));
     }
 }

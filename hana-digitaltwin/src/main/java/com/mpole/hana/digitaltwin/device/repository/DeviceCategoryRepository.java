@@ -23,6 +23,7 @@ public interface DeviceCategoryRepository extends JpaRepository<DeviceCategory,L
             FROM DeviceCategory dc 
             LEFT JOIN FETCH dc.parent p
             LEFT JOIN FETCH p.parent gp
+            LEFT JOIN FETCH dc.defaultAsset
             WHERE dc.categoryId = :categoryId
             """)
     Optional<DeviceCategory> findWithParentJustThreeDepthById(@Param("categoryId")Long categoryId);

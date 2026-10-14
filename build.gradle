@@ -5,9 +5,13 @@ plugins {
     id "io.spring.dependency-management" apply false
 }
 
+// 빌드 날짜 (예: 20260917)
+def buildDate = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
+
 allprojects {
     group = findProperty("group") ?: "com.mpole.hana"
-    version = findProperty("version") ?: "0.0.1-SNAPSHOT"
+    // 버전 = gradle.properties 의 version + 빌드 날짜   예) 0.0.1-SNAPSHOT-20260917
+    version = "${version}-${buildDate}"
 }
 
 subprojects {

@@ -40,6 +40,15 @@ public interface LightingDeviceRepository extends JpaRepository<Device, Long> {
     List<Device> fetchForLightingByFloor(@Param("categoryIds") Collection<Long> categoryIds,
                                          @Param("floorId") Long floorId);
 
+    /**
+     * 구역 기준 조회.
+     *
+     * <p><b>단일 zoneId 가 아니라 목록을 받는다</b> — 구역에 계층이 생겨서(화장실 &gt; 부스)
+     * 화장실 구역을 고르면 그 안 부스에 배치된 조명도 나와야 하기 때문이다.
+     * 호출부가 {@code ZoneCascadeService.resolveSubtreeZoneIds()} 로 서브트리를 펼쳐 넘긴다.</p>
+     *
+     * @param zoneIds 자기 자신을 포함한 서브트리 구역 id. <b>빈 목록을 넘기지 말 것</b>(SQL 오류)
+     */
     @Query("""
             SELECT DISTINCT d FROM Device d
             LEFT JOIN FETCH d.placement p
@@ -47,9 +56,9 @@ public interface LightingDeviceRepository extends JpaRepository<Device, Long> {
             LEFT JOIN FETCH z.floor f
             LEFT JOIN FETCH d.deviceCurrentValue
             WHERE d.category.categoryId IN :categoryIds
-              AND z.zoneId = :zoneId
+              AND z.zoneId IN :zoneIds
             ORDER BY d.deviceId ASC
             """)
-    List<Device> fetchForLightingByZone(@Param("categoryIds") Collection<Long> categoryIds,
-                                        @Param("zoneId") Long zoneId);
+    List<Device> fetchForLightingByZoneIds(@Param("categoryIds") Collection<Long> categoryIds,
+                                           @Param("zoneIds") Collection<Long> zoneIds);
 }

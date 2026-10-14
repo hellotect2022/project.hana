@@ -11,6 +11,7 @@ public record DeviceRawPointData(
         String deviceCode,
         String pointCode,
         String schemaTagName,
+        String pointDisplayName,
         PointType pointType,
         String unit,
         boolean isAlarmSource

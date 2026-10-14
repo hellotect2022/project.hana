@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.device.dto;
 
 import com.mpole.hana.digitaltwin.device.entity.DeviceCategory;
+import com.mpole.hana.digitaltwin.device.property.DevicePropertyType;
 import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import lombok.Builder;
 
@@ -23,6 +24,7 @@ public record DeviceCategoryResponse(
         Boolean isLeaf,
         Long assetId,
         String assetName,
+        DevicePropertyType propertyType,
         List<PointSchemaDefinition> schemaDefinitions,
         List<DeviceCategoryResponse> children
 ) {
@@ -42,6 +44,7 @@ public record DeviceCategoryResponse(
                 .isLeaf(entity.isLeaf())
                 .assetId(entity.getDefaultAsset() != null ? entity.getDefaultAsset().getAssetId() : null)
                 .assetName(entity.getDefaultAsset() != null ? entity.getDefaultAsset().getAssetName() : null)
+                .propertyType(entity.getPropertyType())
                 .schemaDefinitions(entity.getSchemaDefinitions() != null ? entity.getSchemaDefinitions() : new ArrayList<>())
                 .children(new ArrayList<>())
                 .build();

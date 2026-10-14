@@ -1,5 +1,5 @@
 server:
-  port: 8084
+  port: 8082
 
 # Swagger UI: 어노테이션 런타임 스펙 대신, 테스트로 생성된 OpenAPI(/docs/openapi3.json)를 로드 (순수 REST Docs)
 springdoc:
@@ -9,29 +9,42 @@ springdoc:
     #url: /docs/openapi3.json
     # 💡 기본 펼침 상태 설정 (none으로 하면 모두 접힌 채로 시작합니다)
     doc-expansion: none
-    path: /swagger-ui/index.html
+    path: /swagger-ui.html   # 👈 /swagger-ui/index.html 대신 이렇게 변경하세요!
+    #path: /swagger-ui/index.html
 
 
 spring:
   application:
     name: hana-digitaltwin
 
+  # 물리버튼(enocean) → DeviceBundle → view01 발행용 producer (2026-10-01). gateway/event 와 같은 브로커.
+  # 역직렬화는 event 가 spring.json.value.default.type=DeviceBundle 로 하므로 타입 헤더를 붙이지 않는다.
+  kafka:
+    bootstrap-servers: 192.168.250.249:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+
   datasource:
     main:
-      jdbc-url: jdbc:postgresql://192.168.250.181:5432/hdt?currentSchema=core&reWriteBatchedStatements=true
+      jdbc-url: jdbc:postgresql://192.168.250.88:5432/hdt?currentSchema=core&reWriteBatchedStatements=true
       #jdbc-url: jdbc:postgresql://192.168.250.249:5432/hdt?currentSchema=core2&reWriteBatchedStatements=true
       username: testuser
       password: 1q2w3e
       driver-class-name: org.postgresql.Driver
       # 연계 DB (MSSQL)
-    external:
-      jdbc-url: jdbc:sqlserver://192.168.250.180:1433;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
-      username: sa
-      password: "!Q2w3e4r"
-      #jdbc-url: jdbc:sqlserver://210.91.59.66:2022;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
-      #username: DtMpole
-      #password: mPole20261*
-      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+#    external:
+#      jdbc-url: jdbc:sqlserver://192.168.250.180:1433;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
+#      username: sa
+#      password: "!Q2w3e4r"
+#      #jdbc-url: jdbc:sqlserver://210.91.59.66:2022;databaseName=SI_HANAHQ_T;encrypt=true;trustServerCertificate=true
+#      #username: DtMpole
+#      #password: mPole20261*
+#      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
 
   jpa:
     hibernate:
@@ -46,9 +59,11 @@ spring:
           batch_size: 1000
         order_updates: true # update sql 정렬
         # PostgreSQL에 최적화된 쿼리를 생성하도록 방언 설정
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-        show_sql: true
+        # PostgreSQLDialect 를 상속해 enum CHECK 제약 생성만 차단한 커스텀 방언.
+        # (global/config/NoEnumCheckPostgreSQLDialect.java 참고)
+        dialect: com.mpole.hana.digitaltwin.global.config.NoEnumCheckPostgreSQLDialect
+        format_sql: false
+        show_sql: false
         default_batch_fetch_size: 1000 # 보통 100~500 권장
     defer-datasource-initialization: true  # JPA 테이블 생성 후 data.sql 실행
 
@@ -58,9 +73,9 @@ spring:
 #  - org.hibernate.tool.schema=debug  : 시작 시 생성/변경(ALTER/CREATE) DDL
 logging:
   level:
-    org.hibernate.SQL: debug
-    org.hibernate.orm.jdbc.bind: trace
-    org.hibernate.tool.schema: debug
+    org.hibernate.SQL: INFO
+    org.hibernate.orm.jdbc.bind: INFO
+    org.hibernate.tool.schema: INFO
 
 # JWT 설정 (관제 시스템 최적화)
 jwt:
@@ -113,6 +128,9 @@ management:
       enabled: false
 
 hdt:
+  kafka:
+    topic:
+      view01: view01                      # gateway/event 의 hdt.kafka.topic.view01 과 동일해야 함 (버튼 번들 발행)
   monitor:
     targets:
       event: http://localhost:8091
@@ -130,3 +148,28 @@ hdt:
         command: /api/device/command
       timeout-ms: 3000
       token-response-field: accessToken
+    hqs:
+      base-url: #http://100.78.173.16/partner-api/   # HQS 운영 서버
+      paths:
+        login: /api/v1/login/external         # JWT 발급. 이 호출만 Authorization 없이 나간다
+        wc-button: /inbound/device/api/v1/wcinfo/alarm   # 화장실 물리버튼 알림 전송 경로
+      login:
+        client-id: hqs-access-control
+        client-value: ${HQS_CLIENT_VALUE:g2KCx0e4mSL2jv+rfl2+MHD4DWv/cHu08TBInQCAGhs=}  # 자격증명 — 운영은 환경변수로 덮어쓸 것
+      timeout-ms: 3000
+      vacancy-timeout-ms: 60000               # 마지막 움직임 이후 이만큼 지나면 퇴실로 본다(조회 시점 계산). 0=시간검사 없음
+      access-token: ${HQS_ACCESS_TOKEN:}      # HQS 호출용 Bearer 토큰. 자격증명이므로 평문 커밋 금지 — 환경변수로 주입
+    emblaze:
+      enabled: true                          # true 여야 RabbitMQ 수신 config/listener 기동. 실브로커 접속정보 확인 후 전환
+      rabbit:
+        host: 127.0.0.1                       # 원본 테스트값 — 실브로커 host 로 교체 필요
+        monitoring:                           # web은 15672 / AMQP 45672 (AMQPS면 35672+SSL)
+          port: 45672
+          username: LS-DX-TEST-1
+          password: 9325eeb1a0d79c18dcb6c5b855924b2b08644a214337bb04043447edc371f3df
+          virtual-host: /
+        control:
+          port: 45673
+          username: LS-DX-TEST-1
+          password: 9325eeb1a0d79c18dcb6c5b855924b2b08644a214337bb04043447edc371f3df
+          virtual-host: /

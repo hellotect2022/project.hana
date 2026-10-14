@@ -1,200 +1,93 @@
 package com.mpole.hana.digitaltwin.sop.service;
 
-import com.mpole.hana.digitaltwin.sop.dto.*;
-import com.mpole.hana.digitaltwin.sop.dto.SopStructureDtos.*;
-import com.mpole.hana.digitaltwin.sop.entity.*;
-import com.mpole.hana.digitaltwin.sop.repository.*;
+import com.mpole.hana.digitaltwin.sop.dto.SopTemplateDtos.CreateRequest;
+import com.mpole.hana.digitaltwin.sop.dto.SopTemplateDtos.DetailResponse;
+import com.mpole.hana.digitaltwin.sop.dto.SopTemplateDtos.SummaryResponse;
+import com.mpole.hana.digitaltwin.sop.dto.SopTemplateDtos.UpdateRequest;
+import com.mpole.hana.digitaltwin.sop.entity.SopTemplate;
+import com.mpole.hana.digitaltwin.sop.model.SopTemplateBody;
+import com.mpole.hana.digitaltwin.sop.repository.SopTemplateRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class SopTemplateService {
 
-    private final SopTemplateRepository templateRepository;
-    private final SopStepRepository stepRepository;
-    private final SopTransitionRepository transitionRepository;
-    private final SopSnapshotService snapshotService;
+    private static final int BODY_VERSION = 2;
+
+    private final SopTemplateRepository repository;
+    private final SopBodyValidator validator;
 
     @Transactional(readOnly = true)
-    public List<SopTemplateSummaryResponse> listTemplates(boolean activeOnly) {
+    public List<SummaryResponse> list(boolean activeOnly) {
         List<SopTemplate> templates = activeOnly
-                ? templateRepository.findByActiveTrueOrderByTemplateNameAsc()
-                : templateRepository.findAllByOrderByTemplateNameAsc();
-        return templates.stream().map(SopTemplateSummaryResponse::from).toList();
+                ? repository.findByActiveTrueOrderByTemplateNameAsc()
+                : repository.findAllByOrderByTemplateNameAsc();
+        return templates.stream().map(SummaryResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public SopTemplateSummaryResponse getTemplateSummary(Long templateId) {
-        return SopTemplateSummaryResponse.from(getTemplateEntity(templateId));
-    }
-
-    @Transactional(readOnly = true)
-    public SopTemplateDetailResponse getTemplateDetail(Long templateId) {
-        SopTemplate template = getTemplateEntity(templateId);
-        List<SopStep> steps = stepRepository.findByTemplateIdWithItems(templateId);
-        List<SopTransition> transitions = transitionRepository.findByTemplate_TemplateId(templateId);
-        return toTemplateDetail(template, steps, transitions);
-    }
-
-    @Transactional(readOnly = true)
-    public SopTemplate getTemplateForRuntime(Long templateId) {
-        SopTemplate template = getTemplateEntity(templateId);
-        long stepCount = stepRepository.findByTemplateIdWithItems(templateId).size();
-        if (stepCount == 0) {
-            throw new IllegalStateException("스텝이 없는 SOP 템플릿입니다. templateId=" + templateId);
-        }
-        return template;
+    public DetailResponse getDetail(Long templateId) {
+        return DetailResponse.from(find(templateId));
     }
 
     @Transactional
-    public SopTemplateSummaryResponse createTemplate(SopTemplateCreateRequest request) {
-        if (templateRepository.existsByTemplateCode(request.templateCode())) {
-            throw new IllegalStateException("이미 존재하는 템플릿 코드입니다: " + request.templateCode());
+    public SummaryResponse create(CreateRequest request) {
+        String code = request.templateCode().trim();
+        if (repository.existsByTemplateCode(code)) {
+            throw new IllegalArgumentException("이미 존재하는 템플릿 코드입니다: " + code);
         }
-        int timeout = request.timeoutMinutes() != null ? request.timeoutMinutes() : 10;
-        String name = request.templateName().trim();
         SopTemplate template = SopTemplate.builder()
-                .templateCode(request.templateCode().trim())
-                .templateName(name)
+                .templateCode(code)
+                .templateName(request.templateName().trim())
                 .description(request.description())
+                .title(request.title() != null ? request.title() : request.templateName().trim())
                 .active(true)
-                .title(name)
-                .timeoutMinutes(timeout)
                 .revision(1)
+                .body(new SopTemplateBody(BODY_VERSION, List.of())) // 빈 문서(steps 없음)로 시작
                 .build();
-        templateRepository.save(template);
-        return SopTemplateSummaryResponse.from(template);
+        repository.save(template);
+        return SummaryResponse.from(template);
     }
 
     @Transactional
-    public void updateTemplate(Long templateId, SopTemplateUpdateRequest request) {
-        SopTemplate template = getTemplateEntity(templateId);
-        template.setTemplateName(request.templateName().trim());
+    public void update(Long templateId, UpdateRequest request) {
+        SopTemplate template = find(templateId);
+        if (request.templateName() != null) {
+            template.setTemplateName(request.templateName().trim());
+        }
         template.setDescription(request.description());
+        if (request.title() != null) {
+            template.setTitle(request.title());
+        }
         if (request.active() != null) {
             template.setActive(request.active());
         }
     }
 
+    /** soft delete. */
     @Transactional
-    public void deleteTemplate(Long templateId) {
-        SopTemplate template = getTemplateEntity(templateId);
-        template.setActive(false);
+    public void delete(Long templateId) {
+        find(templateId).setActive(false);
     }
 
+    /** 문서(body) 저장 — 검증 후 저장 + revision 증가. */
     @Transactional
-    public SopTemplateDetailResponse saveStructure(Long templateId, SopTemplateStructureRequest request) {
-        SopTemplate template = getTemplateEntity(templateId);
-        if (request.title() != null && !request.title().isBlank()) {
-            template.setTitle(request.title().trim());
-        }
-        if (request.timeoutMinutes() != null) {
-            template.setTimeoutMinutes(request.timeoutMinutes());
-        }
+    public DetailResponse saveBody(Long templateId, SopTemplateBody body) {
+        validator.validate(body);
+        SopTemplate template = find(templateId);
+        template.setBody(new SopTemplateBody(BODY_VERSION, body.steps()));
         template.setRevision(template.getRevision() + 1);
-
-        transitionRepository.deleteByTemplate_TemplateId(templateId);
-        stepRepository.deleteByTemplate_TemplateId(templateId);
-        stepRepository.flush();
-
-        Map<Integer, SopStep> stepByNo = new HashMap<>();
-        for (SopStepDto stepDto : request.steps()) {
-            SopStep step = SopStep.builder()
-                    .template(template)
-                    .stepNo(stepDto.stepNo())
-                    .title(stepDto.title())
-                    .subtitle(stepDto.subtitle())
-                    .requireAllItemsComplete(Boolean.TRUE.equals(stepDto.requireAllItemsComplete()))
-                    .showCompleteButton(stepDto.showCompleteButton() == null || stepDto.showCompleteButton())
-                    .build();
-            if (stepDto.items() != null) {
-                for (SopStepItemDto itemDto : stepDto.items()) {
-                    SopStepItem item = SopStepItem.builder()
-                            .step(step)
-                            .sortOrder(itemDto.sortOrder())
-                            .itemType(itemDto.itemType())
-                            .label(itemDto.label())
-                            .description(itemDto.description())
-                            .config(itemDto.config())
-                            .required(Boolean.TRUE.equals(itemDto.required()))
-                            .build();
-                    step.getItems().add(item);
-                    if (itemDto.buttons() != null) {
-                        for (SopButtonDto btnDto : itemDto.buttons()) {
-                            item.getButtons().add(SopButton.builder()
-                                    .item(item)
-                                    .buttonKey(btnDto.buttonKey())
-                                    .label(btnDto.label())
-                                    .style(btnDto.style() != null ? btnDto.style() : "default")
-                                    .actionType(btnDto.actionType())
-                                    .actionConfig(btnDto.actionConfig())
-                                    .sortOrder(btnDto.sortOrder())
-                                    .build());
-                        }
-                    }
-                }
-            }
-            stepRepository.save(step);
-            stepByNo.put(step.getStepNo(), step);
-        }
-
-        if (request.transitions() != null) {
-            for (SopTransitionDto tr : request.transitions()) {
-                SopStep from = stepByNo.get(tr.fromStepNo());
-                if (from == null) {
-                    throw new IllegalStateException("fromStepNo 없음: " + tr.fromStepNo());
-                }
-                SopStep to = tr.toStepNo() != null ? stepByNo.get(tr.toStepNo()) : null;
-                transitionRepository.save(SopTransition.builder()
-                        .template(template)
-                        .fromStep(from)
-                        .triggerKey(tr.triggerKey())
-                        .toStep(to)
-                        .resultStatus(tr.resultStatus())
-                        .build());
-            }
-        }
-
-        List<SopStep> savedSteps = stepRepository.findByTemplateIdWithItems(templateId);
-        List<SopTransition> savedTransitions = transitionRepository.findByTemplate_TemplateId(templateId);
-        return toTemplateDetail(template, savedSteps, savedTransitions);
+        return DetailResponse.from(template);
     }
 
-    private SopTemplateDetailResponse toTemplateDetail(
-            SopTemplate template,
-            List<SopStep> steps,
-            List<SopTransition> transitions
-    ) {
-        List<SopStepDto> stepDtos = steps.stream().map(snapshotService::toStepDto).toList();
-        List<SopTransitionDto> transitionDtos = transitions.stream()
-                .map(t -> new SopTransitionDto(
-                        t.getFromStep().getStepNo(),
-                        t.getTriggerKey(),
-                        t.getToStep() != null ? t.getToStep().getStepNo() : null,
-                        t.getResultStatus()
-                ))
-                .toList();
-        return new SopTemplateDetailResponse(
-                template.getTemplateId(),
-                template.getTemplateCode(),
-                template.getTemplateName(),
-                template.getRevision(),
-                template.getTitle(),
-                template.getTimeoutMinutes(),
-                stepDtos,
-                transitionDtos
-        );
-    }
-
-    private SopTemplate getTemplateEntity(Long templateId) {
-        return templateRepository.findById(templateId)
+    private SopTemplate find(Long templateId) {
+        return repository.findById(templateId)
                 .orElseThrow(() -> new EntityNotFoundException("SOP 템플릿을 찾을 수 없습니다."));
     }
 }
