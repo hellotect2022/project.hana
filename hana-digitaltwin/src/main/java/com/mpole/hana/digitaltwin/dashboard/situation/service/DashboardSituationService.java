@@ -142,7 +142,7 @@ public class DashboardSituationService {
         Optional<Long> fdpCategoryId = resolveFireRootCategoryId();
         if (fdpCategoryId.isPresent()) {
             AlarmHistoryStats stats = eventService.getAlarmHistoryStats(
-                    null, null, null, null, fdpCategoryId.get(), false, null, dayStart, now);
+                    null, null, null, null, List.of(fdpCategoryId.get()), false, null, dayStart, now);
             alarmTotal = stats.total();
             alarmOpen = stats.open();
         }
