@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 
 /**
  * 주차 입차·출차 조회 API (2026-10-13).
@@ -45,8 +44,8 @@ public class ParkingController {
                     """,
             parameters = {
                     @Parameter(name = "date", description = "하루(KST). 예 2026-10-02. 있으면 from/to 무시", example = "2026-10-02"),
-                    @Parameter(name = "from", description = "기간 시작(포함, ISO-8601)"),
-                    @Parameter(name = "to", description = "기간 끝(미포함, ISO-8601)"),
+                    @Parameter(name = "from", description = "시작 날짜(KST, 그날 00:00부터)", example = "2026-10-01"),
+                    @Parameter(name = "to", description = "끝 날짜(KST, 그날 포함 — 다음날 00:00 전까지)", example = "2026-10-12"),
                     @Parameter(name = "carNo", description = "차량번호 부분 일치"),
                     @Parameter(name = "status", description = "PARKED(주차중) / EXITED(출차). 생략하면 전체")
             }
@@ -54,8 +53,8 @@ public class ParkingController {
     @GetMapping("/sessions")
     public ResponseEntity<ApiResponse<ApiResponse.PageResponse<ParkingSessionResponse>>> sessions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) String carNo,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
@@ -70,15 +69,15 @@ public class ParkingController {
             description = "기간 안 입차 수·출차 수, 그리고 지금 주차중인 차량 수(기간과 무관). 기간 규칙은 목록과 같다.",
             parameters = {
                     @Parameter(name = "date", description = "하루(KST). 있으면 from/to 무시", example = "2026-10-02"),
-                    @Parameter(name = "from", description = "기간 시작(포함, ISO-8601)"),
-                    @Parameter(name = "to", description = "기간 끝(미포함, ISO-8601)")
+                    @Parameter(name = "from", description = "시작 날짜(KST, 그날 00:00부터)", example = "2026-10-01"),
+                    @Parameter(name = "to", description = "끝 날짜(KST, 그날 포함 — 다음날 00:00 전까지)", example = "2026-10-12")
             }
     )
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<ParkingSummary>> summary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return ResponseEntity.ok(ApiResponse.success("주차 집계", parkingQueryService.summary(date, from, to)));
     }
