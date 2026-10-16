@@ -20,7 +20,9 @@ import com.mpole.hana.digitaltwin.parking.dto.ParkingSummary;
 import com.mpole.hana.digitaltwin.parking.entity.ParkingSession;
 import com.mpole.hana.digitaltwin.parking.repository.ParkingSessionRepository;
 import com.mpole.hana.digitaltwin.parking.service.ParkingQueryService;
+import com.mpole.hana.digitaltwin.dashboard.config.DashboardCacheConfig;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,6 +75,7 @@ public class DashboardSituationService {
      * 금일 전력·가스 — 원격검침/누적 포인트 {@link EnergySummaryService} (KST 0시 기준 스냅샷).
      */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'dailyUsage'")
     public SituationDailyUsageKpiResponse getDailyUsageKpi() {
         List<Device> elecMeters = deviceRepository.fetchElectricMeterDevices();
         List<Device> gasMeters = deviceRepository.fetchGasMeterDevices();
@@ -130,6 +133,7 @@ public class DashboardSituationService {
      * 소방방재 — 화재감지기(DET) 등록 대수 + 금일 FDP 계열 이벤트(실DB, 모의 제외).
      */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'fire'")
     public SituationFireKpiResponse getFireKpi() {
         long detectorCount = deviceRepository.countFireDetectorDevices();
         int detCount = detectorCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) detectorCount;
@@ -165,6 +169,31 @@ public class DashboardSituationService {
                 .build();
     }
 
+    /**
+     * 통합현황 상단 — 금일 이벤트 발생 건수 (전체, tbl_event occurred_at, 모의 제외).
+     */
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'event'")
+    public SituationEventKpiResponse getEventKpi() {
+        OffsetDateTime dayStart = LocalDate.now(KST).atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime now = OffsetDateTime.now(KST);
+
+        AlarmHistoryStats stats = eventService.getAlarmHistoryStats(
+                null, null, null, null, null, false, null, dayStart, now);
+
+        return SituationEventKpiResponse.builder()
+                .todayCount(toIntBounded(stats.total()))
+                .completedCount(toIntBounded(stats.completed()))
+                .openCount(toIntBounded(stats.open()))
+                .linked(true)
+                .source("tbl_event (금일 occurred_at, simulated=false, 발행 이벤트 수)")
+                .build();
+    }
+
+    private static int toIntBounded(long value) {
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
+    }
+
     private Optional<Long> resolveFireRootCategoryId() {
         return deviceCategoryRepository.findAllWithParent().stream()
                 .filter(c -> "FDP".equalsIgnoreCase(c.getCategoryCode()))
@@ -176,6 +205,7 @@ public class DashboardSituationService {
      * 조명제어 — 건물조명(LCS) 장비를 구역 유형(일반/화장실/지하주차)별 ON·OFF·알람 집계.
      */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'lighting'")
     public SituationLightingKpiResponse getLightingKpi() {
         List<Long> categoryIds = buildingLightingReader.resolveCategoryIds();
         List<LightingReading> readings = buildingLightingReader.readAll();
@@ -241,6 +271,7 @@ public class DashboardSituationService {
      * 주차관리 — gateway 적재 tbl_parking_in/out 기준 현재 주차·금일 입출차·층별 점유(B1~B7, 定원 40면/층).
      */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'parking'")
     public SituationParkingKpiResponse getParkingKpi() {
         LocalDate today = LocalDate.now(KST);
         ParkingSummary todaySummary = parkingQueryService.summary(today, null, null);
@@ -303,6 +334,7 @@ public class DashboardSituationService {
 
     /** 신재생 에너지 생산(누적) — 태양광 ceg + 지열 chg 합산 및 설비별 내역. */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'renew'")
     public SituationRenewKpiResponse getRenewKpi() {
         List<Device> devices = deviceRepository.fetchRenewableDevices();
         Map<Long, DeviceCurrentValue> currentValueMap = loadSnapshots(devices);
@@ -358,6 +390,7 @@ public class DashboardSituationService {
 
     /** 전력감시 패널 — 한전 인입(SHV) 순시 계측값. */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'powerMonitor'")
     public SituationPowerKpiResponse getPowerMonitorKpi() {
         List<Device> devices = deviceRepository.fetchMainIncomerDevices();
         Map<Long, DeviceCurrentValue> currentValueMap = loadSnapshots(devices);
@@ -395,6 +428,7 @@ public class DashboardSituationService {
 
     /** 기준층 실내 환경 — 항온항습기 temp/humi 평균. */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'indoorEnv'")
     public SituationIndoorEnvKpiResponse getIndoorEnvKpi() {
         List<Device> devices = deviceRepository.fetchIndoorEnvDevices();
         Map<Long, DeviceCurrentValue> currentValueMap = loadSnapshots(devices);

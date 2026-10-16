@@ -46,6 +46,59 @@ public class PowerUsageChartService {
         }
     }
 
+    /** 통계·리포트 일별 kWh (15분 구간 합산, 전력 KPI 차트와 동일 스냅샷 로직). */
+    public List<DailyKwhPoint> buildDailyKwhSeries(List<Long> pointIds, LocalDate fromDay, LocalDate toDay) {
+        if (pointIds == null || pointIds.isEmpty() || fromDay == null || toDay == null) {
+            return List.of();
+        }
+        if (fromDay.isAfter(toDay)) {
+            return List.of();
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(KST);
+        LocalDate today = now.toLocalDate();
+        OffsetDateTime historyStart = fromDay.atStartOfDay(KST).toOffsetDateTime();
+        List<SnapshotRow> snapshots = loadSnapshots(pointIds, historyStart, now);
+        if (snapshots.isEmpty()) {
+            return List.of();
+        }
+
+        List<DailyKwhPoint> out = new ArrayList<>();
+        for (LocalDate d = fromDay; !d.isAfter(toDay); d = d.plusDays(1)) {
+            if (d.isAfter(today)) {
+                break;
+            }
+            double kwh = dailyUsageKwhForDay(snapshots, pointIds, d, today, now);
+            out.add(new DailyKwhPoint(d.format(DATE_LABEL), round3(kwh)));
+        }
+        return out;
+    }
+
+    /** 당일 시간대별 kWh (15분 슬롯을 시 단위로 합산). */
+    public List<DailyKwhPoint> buildTodayHourlyKwh(List<Long> pointIds) {
+        ChartBundle bundle = buildCharts(pointIds);
+        if (bundle.realtimeSeries().isEmpty()) {
+            return List.of();
+        }
+        Map<String, Double> byHour = new HashMap<>();
+        for (var row : bundle.realtimeSeries()) {
+            String t = row.t();
+            if (t == null || t.isBlank()) {
+                continue;
+            }
+            String hour = t.length() >= 2 ? t.substring(0, 2) : t;
+            byHour.merge(hour, row.kwh(), Double::sum);
+        }
+        List<DailyKwhPoint> out = new ArrayList<>();
+        byHour.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> out.add(new DailyKwhPoint(e.getKey() + ":00", round3(e.getValue()))));
+        return out;
+    }
+
+    public record DailyKwhPoint(String date, double kwh) {
+    }
+
     public ChartBundle buildCharts(List<Long> pointIds) {
         if (pointIds == null || pointIds.isEmpty()) {
             return ChartBundle.empty();
@@ -130,6 +183,38 @@ public class PowerUsageChartService {
                     .build());
         }
         return out;
+    }
+
+    private double dailyUsageKwhForDay(
+            List<SnapshotRow> snapshots,
+            List<Long> pointIds,
+            LocalDate day,
+            LocalDate today,
+            OffsetDateTime now) {
+        OffsetDateTime dayStart = day.atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime dayEnd = day.plusDays(1).atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime slotEndLimit = day.equals(today) ? now : dayEnd.minusMinutes(INTERVAL_MINUTES);
+
+        if (slotEndLimit.isBefore(dayStart.plusMinutes(INTERVAL_MINUTES))) {
+            return 0;
+        }
+
+        List<OffsetDateTime> slotEnds = fifteenMinuteSlots(dayStart, slotEndLimit);
+        if (slotEnds.isEmpty()) {
+            return 0;
+        }
+
+        List<Double> totals = cumulativeTotalsAt(snapshots, pointIds, slotEnds);
+        double baseline = baselineTotal(snapshots, pointIds, dayStart);
+        double prev = baseline;
+        double sumKwh = 0;
+
+        for (double total : totals) {
+            double usageKwh = intervalUsageKwh(total, prev);
+            prev = total;
+            sumKwh += usageKwh;
+        }
+        return sumKwh;
     }
 
     private double peakKwForDay(

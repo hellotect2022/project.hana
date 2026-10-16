@@ -6,8 +6,10 @@ import com.mpole.hana.digitaltwin.dashboard.metering.dto.MeteringUtilityItemResp
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
+import com.mpole.hana.digitaltwin.dashboard.config.DashboardCacheConfig;
 import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,10 @@ public class DashboardMeteringService {
     private final DeviceCurrentValueRepository deviceCurrentValueRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = DashboardCacheConfig.SITUATION_CACHE,
+            cacheManager = "dashboardCacheManager",
+            key = "'meteringUtilities'")
     public MeteringSituationPanelResponse getSituationUtilities() {
         Counts elec = countMeters(deviceRepository.fetchElectricMeterDevices());
         Counts gas = countMeters(deviceRepository.fetchGasMeterDevices());

@@ -1,6 +1,7 @@
 package com.mpole.hana.digitaltwin.dashboard.energy.api;
 
 import com.mpole.hana.digitaltwin.dashboard.energy.dto.EnergyGasKpiResponse;
+import com.mpole.hana.digitaltwin.dashboard.energy.dto.EnergyHeatKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.energy.service.DashboardEnergyService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,14 @@ public class DashboardEnergyController {
         return ResponseEntity.ok(ApiResponse.success(
                 "에너지 가스 KPI",
                 dashboardEnergyService.getGasKpi()
+        ));
+    }
+
+    @GetMapping("/heat-kpi")
+    public ResponseEntity<ApiResponse<EnergyHeatKpiResponse>> getHeatKpi() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "에너지 지역난방 KPI",
+                dashboardEnergyService.getHeatKpi()
         ));
     }
 }

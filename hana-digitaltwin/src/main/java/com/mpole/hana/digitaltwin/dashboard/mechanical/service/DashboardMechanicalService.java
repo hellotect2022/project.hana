@@ -6,8 +6,10 @@ import com.mpole.hana.digitaltwin.dashboard.mechanical.support.MechanicalRunStat
 import com.mpole.hana.digitaltwin.device.entity.Device;
 import com.mpole.hana.digitaltwin.device.repository.DeviceRepository;
 import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
+import com.mpole.hana.digitaltwin.dashboard.config.DashboardCacheConfig;
 import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +59,10 @@ public class DashboardMechanicalService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = DashboardCacheConfig.MECHANICAL_CACHE,
+            cacheManager = "dashboardCacheManager",
+            key = "'situationEquipment'")
     public MechanicalSituationPanelResponse getSituationEquipment() {
         List<Device> devices = deviceRepository.fetchMechanicalSituationDevices();
         Map<Long, DeviceCurrentValue> currentValueMap = deviceCurrentValueRepository.findAll().stream()
@@ -124,6 +130,10 @@ public class DashboardMechanicalService {
     );
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = DashboardCacheConfig.MECHANICAL_CACHE,
+            cacheManager = "dashboardCacheManager",
+            key = "'pageBoard:' + #tabId")
     public MechanicalPageBoardResponse getPageBoard(String tabId) {
         String prefix = TAB_DEVICE_PREFIX.get(tabId);
         if (prefix == null) {
@@ -223,6 +233,10 @@ public class DashboardMechanicalService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = DashboardCacheConfig.MECHANICAL_CACHE,
+            cacheManager = "dashboardCacheManager",
+            key = "'equipmentKpi'")
     public MechanicalEquipmentKpiResponse getEquipmentKpi() {
         List<Device> devices = deviceRepository.fetchMechanicalSituationDevices();
         Map<Long, DeviceCurrentValue> currentValueMap = deviceCurrentValueRepository.findAll().stream()

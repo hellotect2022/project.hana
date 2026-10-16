@@ -178,4 +178,64 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
 
     /** 현재 활성(미해소, clearedAt 없음) 이벤트 전체 — "지금 떠 있는 알람" 목록. {@code GET /api/event/active}. */
     List<Event> findByClearedAtIsNullOrderByOccurredAtDesc();
+
+    /** 통계·리포트 — 시간대별 발생 건수 (KST, simulated=false). */
+    @Query(value = """
+            SELECT CAST(FLOOR(EXTRACT(HOUR FROM e.occurred_at AT TIME ZONE 'Asia/Seoul')) AS int) AS bucket,
+                   COUNT(*) AS cnt
+              FROM tbl_event e
+             WHERE e.simulated = FALSE
+               AND e.occurred_at >= :from
+               AND e.occurred_at <= :to
+             GROUP BY 1
+             ORDER BY 1
+            """, nativeQuery = true)
+    List<Object[]> countHourlyOccurrences(
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
+
+    /** 통계·리포트 — 일별 발생 건수 (KST, simulated=false). */
+    @Query(value = """
+            SELECT CAST((e.occurred_at AT TIME ZONE 'Asia/Seoul') AS date) AS bucket,
+                   COUNT(*) AS cnt
+              FROM tbl_event e
+             WHERE e.simulated = FALSE
+               AND e.occurred_at >= :from
+               AND e.occurred_at <= :to
+             GROUP BY 1
+             ORDER BY 1
+            """, nativeQuery = true)
+    List<Object[]> countDailyOccurrences(
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
+
+    /** 통계·리포트 — 월별 발생 건수 (KST, simulated=false). */
+    @Query(value = """
+            SELECT CAST(date_trunc('month', e.occurred_at AT TIME ZONE 'Asia/Seoul') AS date) AS bucket,
+                   COUNT(*) AS cnt
+              FROM tbl_event e
+             WHERE e.simulated = FALSE
+               AND e.occurred_at >= :from
+               AND e.occurred_at <= :to
+             GROUP BY 1
+             ORDER BY 1
+            """, nativeQuery = true)
+    List<Object[]> countMonthlyOccurrences(
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
+
+    /** 통계·리포트 — 심각도(level)별 발생 건수 (simulated=false). */
+    @Query(value = """
+            SELECT COALESCE(NULLIF(TRIM(e.level), ''), 'UNKNOWN') AS lvl,
+                   COUNT(*) AS cnt
+              FROM tbl_event e
+             WHERE e.simulated = FALSE
+               AND e.occurred_at >= :from
+               AND e.occurred_at <= :to
+             GROUP BY 1
+             ORDER BY COUNT(*) DESC
+            """, nativeQuery = true)
+    List<Object[]> countByLevel(
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
 }
