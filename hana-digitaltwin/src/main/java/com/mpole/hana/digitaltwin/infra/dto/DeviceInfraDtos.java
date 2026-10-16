@@ -14,10 +14,14 @@ public final class DeviceInfraDtos {
     private DeviceInfraDtos() {
     }
 
-    /** 등록/수정 요청. refInfraCode 는 외부(vw_02) 매핑 키 — 관리자 직접 입력(NVR 등 수동 타입은 null 허용). */
+    /**
+     * 등록/수정 요청. refInfraCode 는 외부(vw_02) 매핑 키 — 관리자 직접 입력(NVR 등 수동 타입은 null 허용).
+     * infraDisplayName(2026-10-16): 화면 표시 이름. 수정 시 null = 변경 없음, 빈 문자열 = 지움.
+     */
     public record DeviceInfraRequest(
             String refInfraCode,
             String infraName,
+            String infraDisplayName,
             InfraType infraType,
             Boolean active,
             Map<String, Object> properties
@@ -28,6 +32,7 @@ public final class DeviceInfraDtos {
             Long infraId,
             String refInfraCode,
             String infraName,
+            String infraDisplayName,
             InfraType infraType,
             ConnectionState networkState,
             OffsetDateTime lastCommAt,
@@ -42,6 +47,7 @@ public final class DeviceInfraDtos {
                     e.getInfraId(),
                     e.getRefInfraCode(),
                     e.getInfraName(),
+                    e.getInfraDisplayName(),
                     e.getInfraType(),
                     e.getNetworkState(),
                     e.getLastCommAt(),

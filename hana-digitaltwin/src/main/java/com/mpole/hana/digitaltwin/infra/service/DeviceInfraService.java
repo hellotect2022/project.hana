@@ -61,6 +61,7 @@ public class DeviceInfraService {
         DeviceInfra saved = deviceInfraRepository.save(DeviceInfra.builder()
                 .refInfraCode(refCode)
                 .infraName(request.infraName().trim())
+                .infraDisplayName(trimToNull(request.infraDisplayName()))
                 .infraType(request.infraType())
                 .active(request.active() == null || request.active())
                 .properties(request.properties())
@@ -84,6 +85,9 @@ public class DeviceInfraService {
         }
         if (request.infraName() != null && !request.infraName().isBlank()) {
             infra.setInfraName(request.infraName().trim());
+        }
+        if (request.infraDisplayName() != null) {   // null = 변경 없음, 빈 문자열 = 지움
+            infra.setInfraDisplayName(trimToNull(request.infraDisplayName()));
         }
         if (request.infraType() != null) {
             infra.setInfraType(request.infraType());

@@ -35,6 +35,7 @@ public interface DeviceCctvMappingRepository extends JpaRepository<DeviceCctvMap
      * CCTV 매핑 후보 목록 — 장비 자신의 property_info(jsonb) 의 type 이 CCTV 인 장비 전체.
      * (카테고리 property_type 컬럼은 미배선(값 없음)이라 사용하지 않고, 실제 판별 기준인
      *  property_info->>'type' 로 필터한다.)
+     * name·ip 는 소문자 LIKE 패턴(%…%) 또는 null(조건 제외). 2026-10-15
      */
     @Query("""
             SELECT
@@ -49,9 +50,16 @@ public interface DeviceCctvMappingRepository extends JpaRepository<DeviceCctvMap
             LEFT JOIN p.unityZone z
             LEFT JOIN z.floor f
             WHERE function('jsonb_extract_path_text', cctv.propertyInfo, 'type') = :type
+              AND (:name IS NULL
+                   OR lower(cctv.deviceName) LIKE :name
+                   OR lower(cctv.deviceDisplayName) LIKE :name)
+              AND (:ip IS NULL
+                   OR lower(function('jsonb_extract_path_text', cctv.propertyInfo, 'cctv_ip')) LIKE :ip)
             ORDER BY f.floorName ASC, cctv.deviceName ASC
             """)
-    List<CctvInfoProjection> findCctvCandidates(@Param("type") String type);
+    List<CctvInfoProjection> findCctvCandidates(@Param("type") String type,
+                                                @Param("name") String name,
+                                                @Param("ip") String ip);
 
     @Modifying
     @Query("DELETE FROM DeviceCctvMapping m WHERE m.device.deviceId = :deviceId")

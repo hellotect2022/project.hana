@@ -40,6 +40,10 @@ public class DeviceInfra extends DateEntity {
     @Column(name = "infra_name", length = 200, nullable = false)
     private String infraName;
 
+    @Column(name = "infra_display_name", length = 200)
+    @Comment("표시 이름(화면용). 없으면 infra_name 을 쓴다")
+    private String infraDisplayName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "infra_type", length = 32, nullable = false)
     private InfraType infraType;

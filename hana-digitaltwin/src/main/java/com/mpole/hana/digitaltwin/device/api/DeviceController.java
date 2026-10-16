@@ -411,6 +411,15 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("장비 주변 CCTV 매핑 완료"));
     }
 
+    @Operation(
+            summary = "장비 주변 CCTV 매핑 조회",
+            description = """
+                    장비에 매핑된 주변 CCTV 목록. 이벤트 발생 시 CCTV 분할 배치 순서(sort_order) 순으로 반환한다.
+                    · 매핑이 없으면 빈 목록
+                    · 각 항목: deviceId·deviceName·deviceDisplayName·층(floorId/floorName)·deviceProperty(CCTV 속성, stream_url 포함)
+                    """,
+            parameters = @Parameter(name = "deviceId", description = "매핑 대상 장비 ID(주변 CCTV 를 지정할 장비)", example = "24455")
+    )
     @GetMapping("/{deviceId}/cctv-mapping")
     public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvMapping(
             @PathVariable Long deviceId) {
@@ -418,9 +427,25 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("장비 주변 CCTV 매핑 조회", list));
     }
 
+    @Operation(
+            summary = "CCTV 매핑 후보 목록",
+            description = """
+                    매핑에 고를 수 있는 CCTV 장비 목록. 장비의 property_info.type 이 CCTV 인 장비가 대상이다. 정렬은 층 → 이름.
+                    · name·ip 모두 생략(또는 공백) = 전체
+                    · name: 장비명 또는 표시명 부분일치(대소문자 무시)
+                    · ip: property_info.cctv_ip 부분일치 — 일부만 넣어도 된다(예 10.21)
+                    · 둘 다 주면 AND
+                    """,
+            parameters = {
+                    @Parameter(name = "name", description = "장비명·표시명 검색어(부분일치)", example = "CA-10F"),
+                    @Parameter(name = "ip", description = "cctv_ip 검색어(부분일치)", example = "192.168.10")
+            }
+    )
     @GetMapping("/cctv-candidates")
-    public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvCandidates() {
-        List<CctvCameraResponse> list = deviceService.getCctvCandidates();
+    public ResponseEntity<ApiResponse<List<CctvCameraResponse>>> getCctvCandidates(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String ip) {
+        List<CctvCameraResponse> list = deviceService.getCctvCandidates(name, ip);
         return ResponseEntity.ok(ApiResponse.success("CCTV 매핑 후보 목록", list));
     }
 
