@@ -7,10 +7,18 @@ storage:
     driver: "postgresql"
     host: 192.168.250.88
     port: 5432
-    user: testuser
+    user: mpole
     password: "1q2w3e"
     database: hdt
     schema: core
+    # 커넥션 풀(2026-10-16) — 풀 없이 쿼리마다 연결을 열다 DB max_connections(100) 초과가 났다.
+    # 같은 DB 를 쓰는 서버 전체(event·gateway·digitaltwin × 실행 PC 수) 합이 100 을 넘지 않게 잡을 것.
+    pool:
+      max-size: 20            # 동시 연결 상한. 넘치면 에러 대신 대기
+      initial-size: 2         # 기동 시 미리 열어 둘 연결
+      max-idle-time: 10m      # 이만큼 쉰 연결은 정리
+      max-life-time: 30m      # 이만큼 지난 연결은 교체
+      max-acquire-time: 10s   # 이 시간 안에 연결을 못 얻으면 에러(무한 대기 방지)
 
 spring:
   application:

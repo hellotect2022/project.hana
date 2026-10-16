@@ -51,7 +51,7 @@ public class View02KafkaConsumer {
                         r.receiverOffset().acknowledge();
                     });
                     return netStatusService.applySnapshot(List.copyOf(latest.values()))
-                            .doOnError(e -> log.error("[View02] 배치 처리 실패(다음 배치에서 수렴): {}", e.getMessage()))
+                            .doOnError(e -> log.error("[View02] 배치 처리 실패(다음 배치에서 수렴)", e))
                             .onErrorResume(e -> Mono.empty());
                 })
                 .subscribe();
