@@ -744,11 +744,21 @@ public class DeviceService {
                 .toList();
     }
 
-    /** CCTV 매핑 피커용 — property_info.type 이 CCTV 인 장비 후보 전체. */
+    /**
+     * CCTV 매핑 피커용 — property_info.type 이 CCTV 인 장비 후보.
+     * name(장비명·표시명)·ip(cctv_ip) 부분일치, 대소문자 무시. 둘 다 비면 전체. (2026-10-15)
+     */
     @Transactional(readOnly = true)
-    public List<CctvCameraResponse> getCctvCandidates() {
-        return deviceCctvMappingRepository.findCctvCandidates(DevicePropertyType.CCTV.getJsonName()).stream()
+    public List<CctvCameraResponse> getCctvCandidates(String name, String ip) {
+        return deviceCctvMappingRepository.findCctvCandidates(
+                        DevicePropertyType.CCTV.getJsonName(), likeOf(name), likeOf(ip)).stream()
                 .map(CctvCameraResponse::from)
                 .toList();
+    }
+
+    /** 검색어 → LIKE 패턴(소문자, 양쪽 %). 비어 있으면 null → 조건에서 제외. */
+    private static String likeOf(String q) {
+        if (q == null || q.isBlank()) return null;
+        return "%" + q.trim().toLowerCase() + "%";
     }
 }
