@@ -1,7 +1,9 @@
 package com.mpole.hana.gateway.scheduler;
 
 import com.mpole.hana.gateway.config.properties.View02Properties;
+import com.mpole.hana.gateway.ingestion.dbview.view02.InfraBootstrapService;
 import com.mpole.hana.gateway.ingestion.dbview.view02.View02PublishPipeline;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,6 +30,21 @@ public class View02PollingScheduler {
 
     private final View02Properties properties;
     private final View02PublishPipeline pipeline;
+    private final InfraBootstrapService infraBootstrapService;
+
+    /**
+     * 기동 시 인프라 마스터 동기화(2026-10-16) — vwDigitalTwin_02 → tbl_device_infra upsert.
+     * 실패해도 기동은 계속한다(다음 기동 때 다시 맞춘다).
+     */
+    @PostConstruct
+    public void bootstrapInfraOnStartup() {
+        if (!properties.bootstrapInfraOnStart()) return;
+        try {
+            infraBootstrapService.syncFromView().block(properties.blockTimeout());
+        } catch (Exception e) {
+            log.warn("[InfraBootstrap] 기동 인프라 동기화 실패(기동은 계속): {}", e.getMessage());
+        }
+    }
 
     @Scheduled(
             fixedDelayString = "${hdt.dbview.view02.fixed-delay-ms:10000}",

@@ -24,17 +24,17 @@ spring:
 storage:
   mssql:
     driver: "sqlserver"
-#    host: 100.78.173.16
-#    port: 11433
-#    user: DtMpole
-#    password: "mPole20261*"
-#    database: SI
+    host: 100.78.173.16
+    port: 11433
+    user: DtMpole
+    password: "mPole20261*"
+    database: SI
 
-    host: 192.168.250.180
-    port: 1433
-    user: sa
-    password: "!Q2w3e4r"
-    database: SI_HANAHQ_T
+#    host: 192.168.250.180
+#    port: 1433
+#    user: sa
+#    password: "!Q2w3e4r"
+#    database: SI_HANAHQ_T
     # 커서(sp_cursorfetch) 사용 여부. false = 한 번에 스트리밍(대용량 풀스캔에 유리),
     # true = 128행씩 나눠 받음(행 수만큼 왕복 발생). 기본 false.
     prefer-cursored-execution: false
@@ -52,10 +52,18 @@ storage:
     driver: "postgresql"
     host: 192.168.250.88
     port: 5432
-    user: testuser
+    user: mpole
     password: "1q2w3e"
     database: hdt
     schema: core
+    # 커넥션 풀(2026-10-16) — 풀 없이 쿼리마다 연결을 열다 DB max_connections(100) 초과가 났다.
+    # 같은 DB 를 쓰는 서버 전체(event·gateway·digitaltwin × 실행 PC 수) 합이 100 을 넘지 않게 잡을 것.
+    pool:
+      max-size: 10            # 동시 연결 상한. 넘치면 에러 대신 대기
+      initial-size: 2         # 기동 시 미리 열어 둘 연결
+      max-idle-time: 10m      # 이만큼 쉰 연결은 정리
+      max-life-time: 30m      # 이만큼 지난 연결은 교체
+      max-acquire-time: 10s   # 이 시간 안에 연결을 못 얻으면 에러(무한 대기 방지)
 
 hdt:
   # 외부(SI) 뷰 테이블 연동 — 뷰 하나당 블록 하나. 뷰가 늘면 view03 블록을 추가한다.
@@ -69,13 +77,13 @@ hdt:
       table: vwDigitalTwin_01
       meta-refresh-ms: 300000              # 골격(tbl_device_point) 리로드 주기. 값은 이월됨
       block-timeout: 60s
-      publish-all-on-start: true          # 기동 직후 1회 전 장비 발행(하류 초기 동기화)
+      publish-all-on-start: false          # 기동 직후 1회 전 장비 발행(하류 초기 동기화)
 
     # 뷰 #02 — 중계기 네트워크 상태(vwDigitalTwin_02)
     # ⚠ enabled=false 유지: state-map(1/2/3 의미)이 채워지기 전에는 켜지 말 것.
     #    (컬럼명은 확정됨 — device_code / status)
     view02:
-      enabled: false
+      enabled: true
       fixed-delay-ms: 10000               # 10초 — 상태는 값보다 저빈도
       table: vwDigitalTwin_02
       code-column: device_code            # 중계기 식별 컬럼(= tbl_device_infra.ref_infra_code 와 매칭)
@@ -83,7 +91,11 @@ hdt:
       block-timeout: 30s
       # ⚠ 미확인: 원시 상태코드 → ConnectionState. 1/2/3 각각의 의미가 확인되면 채울 것.
       #   (매핑에 없는 코드는 UNKNOWN 으로 처리된다 — 미지의 코드가 '정상'으로 둔갑하지 않게)
-      state-map: {"1": NORMAL, "2": ABNORMAL, "3": DISCONNECTED}
+      #state-map: {"1": NORMAL, "2": ABNORMAL, "3": DISCONNECTED}
+      state-map: {"1": NORMAL, "2": DISCONNECTED, "3": DISCONNECTED}
+      # 기동 시 이 뷰의 장치 목록을 tbl_device_infra 에 upsert(2026-10-16). View02 스케줄러 기동 시 실행 — enabled=true 여야 돈다.
+      # 신규 = REPEATER·UNKNOWN·{"source":"vwDigitalTwin_02"}, 기존 = infra_name 만 DEVICE_NAME 으로 갱신
+      bootstrap-infra-on-start: true
 
   # 주차 입차·출차 적재(2026-10-13) — 주차 MSSQL 프로시저 → PostgreSQL tbl_parking_in/out. Kafka 안 거침
   parking:

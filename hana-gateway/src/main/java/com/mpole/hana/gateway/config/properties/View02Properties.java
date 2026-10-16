@@ -37,7 +37,12 @@ public record View02Properties(
          */
         Map<String, ConnectionState> stateMap,
         /** 사이클 blocking 상한 — 초과 시 예외로 끊어 스케줄러 스레드 점유를 막는다. */
-        @DefaultValue("30s") Duration blockTimeout
+        @DefaultValue("30s") Duration blockTimeout,
+        /**
+         * gateway 기동 시 이 뷰의 장치 목록을 tbl_device_infra 에 upsert 할지 (2026-10-16).
+         * 실행 위치는 View02PollingScheduler 기동 — {@code enabled=true} 일 때만 돈다.
+         */
+        @DefaultValue("true") boolean bootstrapInfraOnStart
 ) {
     /** 원시 상태코드를 우리 enum 으로 변환(널/미정의 → UNKNOWN). */
     public ConnectionState resolveState(String rawCode) {
