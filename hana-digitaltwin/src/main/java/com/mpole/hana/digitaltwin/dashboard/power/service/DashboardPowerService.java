@@ -496,15 +496,31 @@ public class DashboardPowerService {
                 return deviceName;
             }
         }
-        String code = extractCode(device.getDeviceKey());
+        String deviceKey = device.getDeviceKey() != null ? device.getDeviceKey().trim() : "";
+        String code = extractCode(deviceKey);
         if (code.isBlank() || code.toUpperCase(Locale.ROOT).startsWith("BLANK")) {
-            return null;
+            return fallbackSubstationLayoutNodeId(deviceKey);
         }
         String gen = SUBSTATION_GENERATOR_PANEL_IDS.get(code);
         if (gen != null) {
             return gen;
         }
-        return isSubstationDiagramPanelId(code) ? code : null;
+        if (isSubstationDiagramPanelId(code)) {
+            return code;
+        }
+        return fallbackSubstationLayoutNodeId(deviceKey);
+    }
+
+    /** 계통도 layout node id = device_key (예: PS_PRD_HV-I_SHV-b_ES) */
+    private static String fallbackSubstationLayoutNodeId(String deviceKey) {
+        if (deviceKey == null || deviceKey.isBlank()) {
+            return null;
+        }
+        String key = deviceKey.trim();
+        if (key.startsWith("PS_PRD_") || key.startsWith("PS_PGE_")) {
+            return key;
+        }
+        return null;
     }
 
     private static boolean isSubstationDiagramPanelId(String id) {
