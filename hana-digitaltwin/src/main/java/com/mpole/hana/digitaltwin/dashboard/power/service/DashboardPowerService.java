@@ -549,15 +549,49 @@ public class DashboardPowerService {
         return deviceName.replace('-', '_');
     }
 
+    /**
+     * tagName → valueRaw. 동일 tag 중복 시 비어 있지 않은 값 우선, 둘 다 있으면 updateDatetime 최신.
+     */
     private static Map<String, String> tagValueMap(List<XnPointData> points) {
         Map<String, String> map = new LinkedHashMap<>();
+        Map<String, java.time.OffsetDateTime> latestAt = new LinkedHashMap<>();
         for (XnPointData point : points) {
             if (point == null || point.tagName() == null) {
                 continue;
             }
             String tag = point.tagName().trim();
-            String raw = point.valueRaw();
-            map.putIfAbsent(tag, raw != null ? raw.trim() : null);
+            if (tag.isEmpty()) {
+                continue;
+            }
+            String raw = point.valueRaw() != null ? point.valueRaw().trim() : null;
+            java.time.OffsetDateTime at = point.updateDatetime();
+            String existing = map.get(tag);
+            if (existing == null) {
+                map.put(tag, raw);
+                if (at != null) {
+                    latestAt.put(tag, at);
+                }
+                continue;
+            }
+            boolean existingBlank = existing.isBlank();
+            boolean incomingBlank = raw == null || raw.isBlank();
+            if (existingBlank && !incomingBlank) {
+                map.put(tag, raw);
+                if (at != null) {
+                    latestAt.put(tag, at);
+                }
+                continue;
+            }
+            if (!existingBlank && incomingBlank) {
+                continue;
+            }
+            if (at != null) {
+                java.time.OffsetDateTime prev = latestAt.get(tag);
+                if (prev == null || at.isAfter(prev)) {
+                    map.put(tag, raw);
+                    latestAt.put(tag, at);
+                }
+            }
         }
         return map;
     }

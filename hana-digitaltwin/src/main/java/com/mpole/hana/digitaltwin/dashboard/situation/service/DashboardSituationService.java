@@ -16,9 +16,10 @@ import com.mpole.hana.digitaltwin.realtime.entity.DeviceCurrentValue;
 import com.mpole.hana.digitaltwin.realtime.repository.DeviceCurrentValueRepository;
 import com.mpole.hana.digitaltwin.energy.dto.EnergySummary;
 import com.mpole.hana.digitaltwin.energy.service.EnergySummaryService;
+import com.mpole.hana.digitaltwin.parking.dto.ParkingOccupancy;
 import com.mpole.hana.digitaltwin.parking.dto.ParkingSummary;
-import com.mpole.hana.digitaltwin.parking.entity.ParkingSession;
 import com.mpole.hana.digitaltwin.parking.repository.ParkingSessionRepository;
+import com.mpole.hana.digitaltwin.parking.service.ParkingOccupancyService;
 import com.mpole.hana.digitaltwin.parking.service.ParkingQueryService;
 import com.mpole.hana.digitaltwin.dashboard.config.DashboardCacheConfig;
 import lombok.RequiredArgsConstructor;
@@ -58,9 +59,6 @@ public class DashboardSituationService {
             LIGHT_MODE_GENERAL, LIGHT_MODE_WC, LIGHT_MODE_PARKING);
 
     private static final Pattern PARKING_FLOOR = Pattern.compile("(B\\d+)", Pattern.CASE_INSENSITIVE);
-    private static final List<String> PARKING_FLOORS = List.of(
-            "B1", "B2", "B3", "B4", "B5", "B6", "B7");
-    private static final int PARKING_CAPACITY_PER_FLOOR = 40;
 
     private final DeviceRepository deviceRepository;
     private final DeviceCategoryRepository deviceCategoryRepository;
@@ -69,6 +67,7 @@ public class DashboardSituationService {
     private final EventService eventService;
     private final BuildingLightingReader buildingLightingReader;
     private final ParkingQueryService parkingQueryService;
+    private final ParkingOccupancyService parkingOccupancyService;
     private final ParkingSessionRepository parkingSessionRepository;
 
     /**
@@ -268,58 +267,54 @@ public class DashboardSituationService {
     }
 
     /**
-     * 주차관리 — gateway 적재 tbl_parking_in/out 기준 현재 주차·금일 입출차·층별 점유(B1~B7, 定원 40면/층).
+     * 주차관리 — 전체 면수·현재 주차는 주차면 센서(tbl_device + current_value st), 금일 입출차는 tbl_parking_in/out.
      */
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = DashboardCacheConfig.SITUATION_CACHE, cacheManager = "dashboardCacheManager", key = "'parking'")
     public SituationParkingKpiResponse getParkingKpi() {
         LocalDate today = LocalDate.now(KST);
         ParkingSummary todaySummary = parkingQueryService.summary(today, null, null);
-        long parked = parkingSessionRepository.countParked();
+        ParkingOccupancy occupancy = parkingOccupancyService.occupancy();
 
-        Map<String, Integer> occupiedByFloor = new LinkedHashMap<>();
-        for (String floor : PARKING_FLOORS) {
-            occupiedByFloor.put(floor, 0);
-        }
-        for (ParkingSession session : parkingSessionRepository.findParkedSessions()) {
-            String floor = parseParkingFloor(session.getInDevice());
-            if (floor != null && occupiedByFloor.containsKey(floor)) {
-                occupiedByFloor.merge(floor, 1, Integer::sum);
-            }
-        }
-
-        List<SituationParkingLotKpiResponse> lots = PARKING_FLOORS.stream()
+        List<SituationParkingLotKpiResponse> lots = occupancy.floors().stream()
                 .map(floor -> SituationParkingLotKpiResponse.builder()
-                        .floor(floor)
-                        .occupied(occupiedByFloor.get(floor))
-                        .total(PARKING_CAPACITY_PER_FLOOR)
+                        .floor(normalizeParkingFloorLabel(floor.floorName()))
+                        .occupied(toBoundedInt(floor.parked()))
+                        .total(toBoundedInt(floor.total()))
                         .build())
                 .toList();
 
-        int totalCapacity = PARKING_FLOORS.size() * PARKING_CAPACITY_PER_FLOOR;
-        int occupied = parked > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) parked;
-        boolean linked = parkingSessionRepository.count() > 0;
+        int total = toBoundedInt(occupancy.total());
+        int occupied = toBoundedInt(occupancy.parked());
+        boolean linked = occupancy.total() > 0 || parkingSessionRepository.count() > 0;
 
         return SituationParkingKpiResponse.builder()
                 .occupied(occupied)
-                .total(totalCapacity)
+                .total(total)
                 .lots(lots)
                 .todayInCount(todaySummary.inCount())
                 .todayOutCount(todaySummary.outCount())
                 .linked(linked)
-                .source("tbl_parking_in/out(gateway 5분 동기) + 입차장비명 B층 파싱 + 定원 40면/층(B1~B7)")
+                .source("tbl_device(PA-C/D/E/R) + tbl_device_current_value.st(Y/N) + tbl_parking_in/out(금일 입출차)")
                 .build();
     }
 
-    private static String parseParkingFloor(String inDevice) {
-        if (inDevice == null || inDevice.isBlank()) {
-            return null;
+    private static String normalizeParkingFloorLabel(String floorName) {
+        if (floorName == null || floorName.isBlank()) {
+            return "미배치";
         }
-        Matcher matcher = PARKING_FLOOR.matcher(inDevice);
+        Matcher matcher = PARKING_FLOOR.matcher(floorName);
         if (matcher.find()) {
             return matcher.group(1).toUpperCase();
         }
-        return null;
+        return floorName.trim();
+    }
+
+    private static int toBoundedInt(long value) {
+        if (value <= 0) {
+            return 0;
+        }
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
     }
 
     @Transactional(readOnly = true)
