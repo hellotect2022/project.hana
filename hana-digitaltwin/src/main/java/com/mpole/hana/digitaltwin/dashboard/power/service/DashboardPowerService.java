@@ -388,7 +388,7 @@ public class DashboardPowerService {
         int linked = 0;
         for (Device device : devices) {
             String deviceName = device.getDeviceName() != null ? device.getDeviceName().trim() : "";
-            String hotspotId = toMccHotspotId(deviceName);
+            String hotspotId = toMccHotspotId(device);
             if (hotspotId == null) {
                 continue;
             }
@@ -539,14 +539,45 @@ public class DashboardPowerService {
         return id.equals("G1") || id.equals("G2") || id.equals("G3-1") || id.equals("G3-2");
     }
 
-    private static String toMccHotspotId(String deviceName) {
-        if (deviceName == null || deviceName.isBlank()) {
+    /**
+     * PSD hotspot id — MCC-B7-F3 → MCC_B7_F3, PE-A-B2-F1 → PE_A_B2_F1.
+     * device_name 우선, 없으면 device_key( PS_MCC_MCC_* ) suffix.
+     */
+    private static String toMccHotspotId(Device device) {
+        if (device == null) {
             return null;
         }
-        if (!deviceName.toUpperCase(Locale.ROOT).startsWith("MCC-")) {
+        String deviceName = device.getDeviceName() != null ? device.getDeviceName().trim() : "";
+        if (!deviceName.isBlank()) {
+            String fromName = panNameToMccHotspotId(deviceName);
+            if (fromName != null) {
+                return fromName;
+            }
+        }
+        String deviceKey = device.getDeviceKey() != null ? device.getDeviceKey().trim() : "";
+        if (deviceKey.startsWith("PS_MCC_")) {
+            String suffix = deviceKey.replaceFirst("^PS_MCC_(MCC_)?", "");
+            if (!suffix.isBlank() && !suffix.equals(deviceKey)) {
+                return panNameToMccHotspotId(suffix);
+            }
+        }
+        return null;
+    }
+
+    private static final java.util.regex.Pattern MCC_PAN_PREFIX = java.util.regex.Pattern.compile(
+            "^(MCC|PE|PN|PF|PB|CHT|OAC|CT|LTG|AHU|PNL)",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    private static String panNameToMccHotspotId(String name) {
+        if (name == null || name.isBlank()) {
             return null;
         }
-        return deviceName.replace('-', '_');
+        String trimmed = name.trim();
+        String probe = trimmed.contains("_") ? trimmed.replace('_', '-') : trimmed;
+        if (!MCC_PAN_PREFIX.matcher(probe).find()) {
+            return null;
+        }
+        return trimmed.replace('-', '_');
     }
 
     /**
