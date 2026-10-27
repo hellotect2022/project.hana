@@ -161,6 +161,10 @@ hdt:
       access-token: ${HQS_ACCESS_TOKEN:}      # HQS 호출용 Bearer 토큰. 자격증명이므로 평문 커밋 금지 — 환경변수로 주입
     emblaze:
       enabled: true                          # true 여야 RabbitMQ 수신 config/listener 기동. 실브로커 접속정보 확인 후 전환
+      # light·space 값과 부스 재실(occ)을 event 서버 경유로 기록(2026-10-26). Kafka view01 → event(현재값 병합·규칙 평가·웹소켓)
+      # false = 예전처럼 digitaltwin 이 tbl_device_current_value 에 직접 upsert. enocean(버튼)은 값과 무관하게 항상 event 경유
+      # ⚠ true 는 event 서버 hdt.current-value.write-mode=MERGE 전제(REPLACE 면 같은 장비의 다른 태그가 지워짐)
+      publish-via-event: true
       rabbit:
         host: 127.0.0.1                       # 원본 테스트값 — 실브로커 host 로 교체 필요
         monitoring:                           # web은 15672 / AMQP 45672 (AMQPS면 35672+SSL)

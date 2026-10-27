@@ -17,6 +17,18 @@ public class EmblazeProperties {
     /** true 일 때만 RabbitMQ config/listener 가 기동한다(원본 emblaze.isUse 대응). */
     private boolean enabled = false;
 
+    /**
+     * light·space 값과 재실 판정(occ)을 event 서버 경유로 기록할지 (2026-10-26, 기본 true).
+     * <ul>
+     *   <li>true  — DeviceBundle 을 Kafka view01 로 발행 → event 가 현재값 병합 기록 + 규칙 평가 + 웹소켓 발행(버튼과 같은 길)</li>
+     *   <li>false — 예전처럼 digitaltwin 이 tbl_device_current_value 에 태그 단위로 직접 upsert(되돌리기용)</li>
+     * </ul>
+     * <p>⚠ true 는 event 서버 {@code hdt.current-value.write-mode=MERGE} 를 전제로 한다. 번들에 장비의 일부 태그만
+     * 실리므로(조명 3개, occ 1개) REPLACE(통째 교체)면 같은 장비의 다른 태그가 지워진다.</p>
+     * <p>enocean(물리버튼)은 이 값과 무관하게 항상 event 경유다(2026-10-01).</p>
+     */
+    private boolean publishViaEvent = true;
+
     private Rabbit rabbit = new Rabbit();
 
     @Getter

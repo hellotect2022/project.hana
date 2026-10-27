@@ -2,6 +2,8 @@ package com.mpole.hana.digitaltwin.external.emblaze.amqp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.mpole.hana.digitaltwin.external.common.StageTrace;
+import com.mpole.hana.digitaltwin.external.emblaze.button.ButtonEventPublisher;
+import com.mpole.hana.digitaltwin.external.emblaze.config.EmblazeProperties;
 import com.mpole.hana.digitaltwin.external.emblaze.mapping.AmqpPointMappingCache;
 import com.mpole.hana.digitaltwin.external.emblaze.mapping.AmqpPointTarget;
 import com.mpole.hana.digitaltwin.external.emblaze.write.EmblazeCurrentValueWriter;
@@ -32,17 +34,25 @@ public class EmblazeStatusRouter {
 
     private final AmqpPointMappingCache amqpPointMappingCache;
     private final EmblazeCurrentValueWriter emblazeCurrentValueWriter;
+    private final ButtonEventPublisher buttonEventPublisher;
+    private final EmblazeProperties emblazeProperties;
 
     /**
      * @param deviceUuid emblaze 조명제어기 uuid
      * @param status     메시지의 {@code status} 오브젝트
      * @param eventAt    센서 타임스탬프
      * @param trace      어느 부스로 해석됐는지 {@code map=} 단계로 남긴다
-     * @return 실제로 기록한 포인트 수
+     * @return 실제로 기록(발행)한 포인트 수
      */
     public int route(String deviceUuid, JsonNode status, OffsetDateTime eventAt, StageTrace trace) {
         if (deviceUuid == null || deviceUuid.isBlank() || status == null || !status.isObject()) {
             return 0;
+        }
+
+        // 2026-10-26 — 기본은 event 서버 경유: 장비별 번들 1건을 Kafka view01 로 발행한다(버튼과 같은 길).
+        // event 가 현재값 병합 기록·규칙 평가·웹소켓 발행을 한다. false 면 아래 예전 직접 upsert 로 간다.
+        if (emblazeProperties.isPublishViaEvent()) {
+            return buttonEventPublisher.publish(deviceUuid, status, eventAt, trace);
         }
 
         int written = 0;

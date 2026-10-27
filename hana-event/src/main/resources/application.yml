@@ -67,6 +67,12 @@ hdt:
       digitaltwin-base-url: http://localhost:8082   # digitaltwin 서버 주소(같은 서버면 localhost). 운영 배포 시 확인
       timeout: 15s                        # 응답 대기 상한. 여러 장비를 순차 제어하므로 XN 타임아웃(연결3s+읽기3s)×건수 고려
 
+  # 현재값 기록 방식(2026-10-26 태그 단위 병합 시험)
+  #   REPLACE 기존(points 통째 교체) / SHADOW 기존 + 병합을 복사 테이블(tbl_device_current_value_merge_test)에 따로 기록 / MERGE 병합으로 실제 기록
+  #   SHADOW 전 scripts/current-value/2026-10-26-current-value-merge-test.sql 로 복사 테이블을 만들 것
+  current-value:
+    write-mode: MERGE
+
   # 누적 전력량 5분 스냅샷·포인트 배율(2026-10-12) — 설정 원천은 카테고리 스키마(관리자 > 장비 카테고리 관리 > 포인트 스키마 "고급")
   energy:
     snapshot-enabled: true                # false 면 5분 스냅샷을 찍지 않는다(금일·금월 기준값이 안 쌓임)
