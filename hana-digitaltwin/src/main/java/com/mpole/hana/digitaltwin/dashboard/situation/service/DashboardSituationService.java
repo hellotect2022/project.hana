@@ -60,6 +60,10 @@ public class DashboardSituationService {
 
     private static final Pattern PARKING_FLOOR = Pattern.compile("(B\\d+)", Pattern.CASE_INSENSITIVE);
 
+    private static final List<String> ELECTRIC_USAGE_UNITS = List.of(
+            "kWh", "total_kWh", "KWH", "total-kWh");
+    private static final List<String> GAS_USAGE_UNITS = List.of("G", "total-g");
+
     private final DeviceRepository deviceRepository;
     private final DeviceCategoryRepository deviceCategoryRepository;
     private final DeviceCurrentValueRepository DeviceCurrentValueRepository;
@@ -79,15 +83,8 @@ public class DashboardSituationService {
         List<Device> elecMeters = deviceRepository.fetchElectricMeterDevices();
         List<Device> gasMeters = deviceRepository.fetchGasMeterDevices();
 
-        List<Long> elecIds = elecMeters.stream().map(Device::getDeviceId).toList();
-        List<Long> gasIds = gasMeters.stream().map(Device::getDeviceId).toList();
-
-        List<EnergySummary> elecSummaries = elecIds.isEmpty()
-                ? List.of()
-                : energySummaryService.summary(elecIds, List.of("kWh", "total_kWh", "KWH", "total-kWh"));
-        List<EnergySummary> gasSummaries = gasIds.isEmpty()
-                ? List.of()
-                : energySummaryService.summary(gasIds, List.of("G", "total-g"));
+        List<EnergySummary> elecSummaries = summarizeElectricUsage(elecMeters);
+        List<EnergySummary> gasSummaries = summarizeGasUsage(gasMeters);
 
         double todayPowerKwh = sumTodayUsage(elecSummaries);
         double todayGasM3 = sumTodayUsage(gasSummaries);
@@ -107,6 +104,84 @@ public class DashboardSituationService {
                 .powerSource("EnergySummary RM_KWH/KWH 누적 포인트 금일(kWh→MWh)")
                 .gasSource("EnergySummary RM_GM total-g/G 누적 포인트 금일(Nm³)")
                 .build();
+    }
+
+    /**
+     * 금일 전력·가스 — 누적 포인트별 목록 (KPI 합계와 동일 필터·집계).
+     *
+     * @param type {@code power} 또는 {@code gas}
+     */
+    @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = DashboardCacheConfig.SITUATION_CACHE,
+            cacheManager = "dashboardCacheManager",
+            key = "'dailyUsageDetail:' + #type")
+    public SituationDailyUsageDetailResponse getDailyUsageDetail(String type) {
+        String normalized = type == null ? "" : type.trim().toLowerCase();
+        return switch (normalized) {
+            case "power" -> buildDailyUsageDetail(
+                    "power",
+                    "EnergySummary RM_KWH/KWH 누적 포인트 금일(kWh)",
+                    summarizeElectricUsage(deviceRepository.fetchElectricMeterDevices()));
+            case "gas" -> buildDailyUsageDetail(
+                    "gas",
+                    "EnergySummary RM_GM total-g/G 누적 포인트 금일(Nm³)",
+                    summarizeGasUsage(deviceRepository.fetchGasMeterDevices()));
+            default -> throw new IllegalArgumentException("type must be power or gas");
+        };
+    }
+
+    private List<EnergySummary> summarizeElectricUsage(List<Device> elecMeters) {
+        List<Long> elecIds = elecMeters.stream().map(Device::getDeviceId).toList();
+        if (elecIds.isEmpty()) {
+            return List.of();
+        }
+        return energySummaryService.summary(elecIds, ELECTRIC_USAGE_UNITS);
+    }
+
+    private List<EnergySummary> summarizeGasUsage(List<Device> gasMeters) {
+        List<Long> gasIds = gasMeters.stream().map(Device::getDeviceId).toList();
+        if (gasIds.isEmpty()) {
+            return List.of();
+        }
+        return energySummaryService.summary(gasIds, GAS_USAGE_UNITS);
+    }
+
+    private static SituationDailyUsageDetailResponse buildDailyUsageDetail(
+            String type, String source, List<EnergySummary> summaries) {
+        List<SituationDailyUsageDetailRow> rows = summaries.stream()
+                .map(DashboardSituationService::toDailyUsageDetailRow)
+                .sorted((a, b) -> {
+                    int byDevice = nullSafeString(a.deviceName()).compareToIgnoreCase(nullSafeString(b.deviceName()));
+                    if (byDevice != 0) {
+                        return byDevice;
+                    }
+                    return nullSafeString(a.tagName()).compareToIgnoreCase(nullSafeString(b.tagName()));
+                })
+                .toList();
+        return SituationDailyUsageDetailResponse.builder()
+                .type(type)
+                .source(source)
+                .rows(rows)
+                .build();
+    }
+
+    private static SituationDailyUsageDetailRow toDailyUsageDetailRow(EnergySummary s) {
+        Double today = s.today() != null ? s.today().value() : null;
+        return SituationDailyUsageDetailRow.builder()
+                .deviceId(s.deviceId())
+                .deviceName(s.deviceName())
+                .pointId(s.pointId())
+                .tagName(s.tagName())
+                .pointName(s.pointName())
+                .unit(s.unit())
+                .todayValue(today)
+                .stale(s.stale())
+                .build();
+    }
+
+    private static String nullSafeString(String value) {
+        return value == null ? "" : value;
     }
 
     private static double sumTodayUsage(List<EnergySummary> summaries) {
@@ -401,6 +476,10 @@ public class DashboardSituationService {
                     byTag.putIfAbsent(point.tagName().trim(), point.valueRaw());
                 }
             }
+            Double activeKwh = firstTagNumber(byTag, "APH", "kWh", "total_kWh");
+            Double reactiveKvarh = firstTagNumber(byTag, "RPH", "kVarh");
+            Double currentPeakKwh = firstTagNumber(byTag, "peak-w", "peak-kWh", "peak_kWh");
+
             return SituationPowerKpiResponse.builder()
                     .kw(numberOrNull(byTag.get("total-kW")))
                     .voltage(numberOrNull(byTag.get("avg-V")))
@@ -409,6 +488,9 @@ public class DashboardSituationService {
                     .powerFactor(numberOrNull(byTag.get("PF")))
                     .peak(numberOrNull(byTag.get("peak-w")))
                     .cumulativeKwh(numberOrNull(byTag.get("kWh")))
+                    .activeEnergyMwh(kwhScaleToMwh(activeKwh))
+                    .reactiveEnergyMvarh(kwhScaleToMwh(reactiveKvarh))
+                    .currentPeakKwh(currentPeakKwh)
                     .linked(true)
                     .updatedAt(currentValue.getUpdatedAt() != null ? currentValue.getUpdatedAt().toString() : null)
                     .source("tbl_device + tbl_device_current_value (PS_PRD_SHV)")
@@ -494,6 +576,24 @@ public class DashboardSituationService {
 
     private static double round1(double value) {
         return Math.round(value * 10.0) / 10.0;
+    }
+
+    private static Double firstTagNumber(Map<String, String> byTag, String... tags) {
+        if (byTag == null || tags == null) {
+            return null;
+        }
+        for (String tag : tags) {
+            Double n = numberOrNull(byTag.get(tag));
+            if (n != null) {
+                return n;
+            }
+        }
+        return null;
+    }
+
+    /** kWh·kVarh 등 → MWh·MVarh (÷1000) */
+    private static Double kwhScaleToMwh(Double kwh) {
+        return kwh == null ? null : kwh / 1000.0;
     }
 
     private static Double numberOrNull(String raw) {

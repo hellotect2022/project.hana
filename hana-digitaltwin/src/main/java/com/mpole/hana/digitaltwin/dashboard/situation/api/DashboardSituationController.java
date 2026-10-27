@@ -1,5 +1,6 @@
 package com.mpole.hana.digitaltwin.dashboard.situation.api;
 
+import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationDailyUsageDetailResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationDailyUsageKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationEventKpiResponse;
 import com.mpole.hana.digitaltwin.dashboard.situation.dto.SituationFireKpiResponse;
@@ -96,6 +97,16 @@ public class DashboardSituationController {
         return ResponseEntity.ok(ApiResponse.success(
                 "통합현황 금일 전력·가스 사용량",
                 dashboardSituationService.getDailyUsageKpi()
+        ));
+    }
+
+    /** 통합현황 — 금일 전력·가스 KPI 상세 (누적 포인트별, {@code type=power|gas}). */
+    @GetMapping("/daily-usage-detail")
+    public ResponseEntity<ApiResponse<SituationDailyUsageDetailResponse>> getDailyUsageDetail(
+            @RequestParam String type) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "통합현황 금일 전력·가스 사용량 상세",
+                dashboardSituationService.getDailyUsageDetail(type)
         ));
     }
 
