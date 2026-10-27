@@ -128,24 +128,25 @@ public interface HqsRollscreenRepository extends JpaRepository<DeviceGroup, Long
     List<Object[]> findGroupsByFloor(@Param("floorName") String floorName);
 
     /**
-     * 제어 대상 — 그 구역 {@code CONTROLLER} 멤버의 {@code pos} 제어 포인트.
+     * 제어 대상 — 그 구역 {@code CONTROLLER} 멤버의 제어 포인트(태그 지정: 개방률 {@code pos} / 정지 {@code stop}).
      *
      * <p>{@code group_code} 는 유일하므로 결과는 0건 아니면 1건이다.
      * {@code floorName} 을 같이 거는 건 층을 검증하기 위함이다 — HQS 가 보낸 층과 그룹의 층이
      * 다르면 제어하지 않는다(엉뚱한 층을 움직이는 것보다 거절이 낫다).</p>
      *
-     * <p><b>현재 3층 19개 구역 중 {@code RS.F003.Z000}(전체) 하나만 command_point 가 있다.</b>
-     * 나머지 18개는 제어 포인트가 등록되지 않아 0건이 나오고, 서비스가 그 사실을 메시지에 담는다.</p>
+     * <p>제어 포인트가 등록되지 않은 구역은 0건이 나오고, 서비스가 그 사실을 메시지에 담는다.</p>
      *
-     * <p>반환 컬럼: {@code [0]command_point_id · [1]device_name}</p>
+     * <p>반환 컬럼: {@code command_point_id · device_name · options}(ENUM 선택지 JSON 문자열, 없으면 null).
+     * 2026-10-26 — 정지 API 추가로 태그를 파라미터로 받는다(이전엔 'pos' 고정).</p>
      */
     @Query(value = """
             SELECT cp.command_point_id,
-                   d.device_name
+                   d.device_name,
+                   CAST(cp.options AS text) AS options
             FROM   tbl_device_group g
             JOIN   tbl_device_group_member m  ON m.group_id  = g.group_id AND m.role = 'CONTROLLER'
             JOIN   tbl_device d               ON d.device_id = m.device_id AND d.active = true
-            JOIN   tbl_device_point p         ON p.device_id = d.device_id AND p.tag_name = 'pos'
+            JOIN   tbl_device_point p         ON p.device_id = d.device_id AND p.tag_name = CAST(:tagName AS text)
             JOIN   tbl_device_command_point cp ON cp.point_id = p.point_id AND cp.active = true
             WHERE  g.group_type = 'ROLLSCREEN'
               AND  g.active = true
@@ -153,7 +154,8 @@ public interface HqsRollscreenRepository extends JpaRepository<DeviceGroup, Long
               AND  g.attributes->>'floor' = CAST(:floorName AS text)
             """, nativeQuery = true)
     Optional<Tuple> findControlPoint(@Param("groupCode") String groupCode,
-                                     @Param("floorName") String floorName);
+                                     @Param("floorName") String floorName,
+                                     @Param("tagName") String tagName);
 
     /**
      * 그룹이 존재하는지(제어 실패 원인을 가르기 위한 것).

@@ -2,6 +2,7 @@ package com.mpole.hana.digitaltwin.overview.dto;
 
 import com.mpole.hana.digitaltwin.overview.entity.OverviewEnums.MemberType;
 import com.mpole.hana.digitaltwin.overview.entity.OverviewEnums.Period;
+import com.mpole.hana.digitaltwin.overview.entity.OverviewEnums.Role;
 import com.mpole.hana.digitaltwin.overview.entity.OverviewEnums.Section;
 import com.mpole.hana.digitaltwin.overview.entity.OverviewEnums.ValueSource;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -38,7 +39,11 @@ public final class OverviewDtos {
             @Schema(description = "POINT — tbl_device_point.point_id") Long pointId,
             @Schema(description = "CATEGORY — 소분류 category_id") Long categoryId,
             @Schema(description = "CATEGORY — 합산할 태그명", example = "total-g") String tagName,
-            @Schema(description = "INFRA — tbl_device_infra.infra_id") Long infraId
+            @Schema(description = "INFRA — tbl_device_infra.infra_id") Long infraId,
+            @Schema(description = "ENERGY_INDEPENDENCE 전용 — NUMERATOR(분자) / DENOMINATOR(분모)", example = "NUMERATOR") Role role,
+            @Schema(description = "ENERGY_INDEPENDENCE 전용 — 계수 1개(factors 가 없을 때만 씀, 0보다 큼)", example = "2.75") BigDecimal coefficient,
+            @Schema(description = "ITEM — 참조 카드 itemId(금일 에너지 사용·생산 항목)", example = "5") Long refItemId,
+            @Schema(description = "ENERGY_INDEPENDENCE 전용 — 계수식(곱할 숫자 목록, 각각 0보다 큼). 계수 = 곱", example = "[10.5, 1.1]") List<BigDecimal> factors
     ) {
     }
 
@@ -84,7 +89,11 @@ public final class OverviewDtos {
             String subLabel,
             Boolean accumulate,
             Integer pointCount,
-            boolean missing
+            boolean missing,
+            Role role,
+            BigDecimal coefficient,
+            Long refItemId,
+            List<BigDecimal> factors
     ) {
     }
 
@@ -95,7 +104,59 @@ public final class OverviewDtos {
             OffsetDateTime asOf,
             List<ValueCard> energyUsage,
             List<ValueCard> energyProduction,
-            List<InfraCard> infraStatus
+            List<InfraCard> infraStatus,
+            List<RatioCard> energyIndependence
+    ) {
+    }
+
+    /**
+     * 에너지 자립률 카드 1칸 (2026-10-23, 카드 참조).
+     * <pre>
+     *   자립률(%) = Σ(분자 카드 값 × 계수) ÷ Σ(분모 카드 값 × 계수) × 100
+     *   카드 값   = 참조한 금일 에너지 사용·생산 카드의 표시 값(단위·배율·자릿수 적용 후) — 패널 숫자와 같다
+     *   등급(ZEB) : 100 이상 1 / 80 이상 2 / 60 이상 3 / 40 이상 4 / 20 이상 5 / 20 미만 null
+     * </pre>
+     *
+     * @param value        자립률(%), decimals 자리 반올림. 분모가 0 이하이거나 분자·분모 중 값 있는 카드가 없으면 null
+     * @param grade        ZEB 등급 1~5. 20% 미만 또는 value 가 null 이면 null
+     * @param numerator    Σ(분자 카드 값 × 계수)
+     * @param denominator  Σ(분모 카드 값 × 계수)
+     * @param missingCount 값이 없거나(계산할 포인트 없음) 지워진 참조 카드 수 — 계산에서 뺀다
+     * @param terms        카드별 계산 내역(구성 대상 순서)
+     */
+    public record RatioCard(
+            Long itemId,
+            String label,
+            BigDecimal value,
+            Integer decimals,
+            Integer grade,
+            BigDecimal numerator,
+            BigDecimal denominator,
+            int missingCount,
+            List<RatioTerm> terms
+    ) {
+    }
+
+    /**
+     * 자립률 카드 1건의 계산 내역.
+     *
+     * @param refValue    참조 카드 표시 값. 없으면 null
+     * @param factors     계수식(곱할 숫자 목록)
+     * @param coefficient factors 의 곱
+     * @param weighted    refValue × coefficient
+     * @param missing     참조 카드가 지워짐
+     */
+    public record RatioTerm(
+            Long memberId,
+            Role role,
+            Long refItemId,
+            String refLabel,
+            String refUnit,
+            BigDecimal refValue,
+            List<BigDecimal> factors,
+            BigDecimal coefficient,
+            BigDecimal weighted,
+            boolean missing
     ) {
     }
 

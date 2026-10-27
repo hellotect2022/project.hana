@@ -8,6 +8,9 @@ import com.mpole.hana.digitaltwin.device.schema.PointSchemaDefinition;
 import com.mpole.hana.digitaltwin.device.service.DeviceCategoryService;
 import com.mpole.hana.digitaltwin.device.service.DeviceService;
 import com.mpole.hana.digitaltwin.global.response.ApiResponse;
+import com.mpole.hana.digitaltwin.realtime.dto.CurrentValueSchemaSyncResponse;
+import com.mpole.hana.digitaltwin.realtime.dto.PointSchemaSyncResponse;
+import com.mpole.hana.digitaltwin.realtime.service.CurrentValueSchemaSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +33,7 @@ import java.util.List;
 public class DeviceByCategoryController {
     private final DeviceService deviceService;
     private final DeviceCategoryService deviceCategoryService;
+    private final CurrentValueSchemaSyncService currentValueSchemaSyncService;
 
     //region swagger 🔄 장비 카테고리 트리 목록 조회 명세서
     @Operation(
@@ -87,6 +91,50 @@ public class DeviceByCategoryController {
             @RequestBody List<PointSchemaDefinition> schema) {
         DeviceCategoryResponse response = deviceCategoryService.updateSchema(categoryId, schema);
         return ResponseEntity.ok(ApiResponse.success("스키마 정의 업데이트", response));
+    }
+
+    @Operation(
+            summary = "현재값 스키마 동기화 미리보기",
+            description = "tbl_device_current_value.points 에서 카테고리 스키마에 없는 태그를 찾아 돌려줍니다. 아무것도 바꾸지 않습니다."
+    )
+    @GetMapping("/device-categories/current-value/schema-sync")
+    public ResponseEntity<ApiResponse<CurrentValueSchemaSyncResponse>> previewCurrentValueSchemaSync() {
+        return ResponseEntity.ok(ApiResponse.success("현재값 스키마 동기화 미리보기", currentValueSchemaSyncService.preview()));
+    }
+
+    @Operation(
+            summary = "현재값 스키마 동기화 실행",
+            description = "tbl_device_current_value.points 에서 카테고리 스키마에 없는 태그를 지웁니다. "
+                    + "스키마가 비어 있는 카테고리의 장비는 건드리지 않습니다."
+    )
+    @PostMapping("/device-categories/current-value/schema-sync")
+    public ResponseEntity<ApiResponse<CurrentValueSchemaSyncResponse>> syncCurrentValueSchema() {
+        return ResponseEntity.ok(ApiResponse.success("현재값 스키마 동기화", currentValueSchemaSyncService.sync()));
+    }
+
+    @Operation(
+            summary = "등록 포인트 스키마 동기화 미리보기",
+            description = "tbl_device_point 에서 장비 카테고리 스키마에 없는 태그의 포인트를 찾아 돌려줍니다. 아무것도 바꾸지 않습니다. "
+                    + "제어 포인트로 쓰는 포인트는 deletable=false(실행해도 지우지 않음)."
+    )
+    @GetMapping("/device-categories/point/schema-sync")
+    public ResponseEntity<ApiResponse<PointSchemaSyncResponse>> previewPointSchemaSync() {
+        return ResponseEntity.ok(ApiResponse.success("등록 포인트 스키마 동기화 미리보기", currentValueSchemaSyncService.previewPoints()));
+    }
+
+    @Operation(
+            summary = "등록 포인트 스키마 동기화 실행",
+            description = """
+                    스키마에 없는 등록 포인트를 지우고, 같은 트랜잭션에서 현재값(points)도 정리합니다.
+                    · 스키마가 비어 있는 카테고리의 장비는 건드리지 않습니다
+                    · 제어 포인트로 쓰는 포인트는 건너뜁니다(skippedPoints)
+                    · 이벤트 이력·에너지 스냅샷은 point_id 만 들고 있어 그대로 남습니다
+                    · gateway 가 등록 포인트를 다시 읽기 전(기본 5분)에 들어온 값으로 현재값에 태그가 다시 생기면 현재값 동기화를 한 번 더 실행하세요
+                    """
+    )
+    @PostMapping("/device-categories/point/schema-sync")
+    public ResponseEntity<ApiResponse<PointSchemaSyncResponse>> syncPointSchema() {
+        return ResponseEntity.ok(ApiResponse.success("등록 포인트 스키마 동기화", currentValueSchemaSyncService.syncPoints()));
     }
 
     //region swagger 🔄 카테고리별 장비 목록 조회 명세서

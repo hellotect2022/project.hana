@@ -1,5 +1,7 @@
 package com.mpole.hana.digitaltwin.external.hqs.rollscreen;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpole.hana.digitaltwin.command.dto.DeviceControlRequest;
 import com.mpole.hana.digitaltwin.command.service.DeviceControlService;
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenControlData;
@@ -7,6 +9,7 @@ import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenContr
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenGroupItem;
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenListData;
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenListRequest;
+import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenStopRequest;
 import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,8 +43,14 @@ public class HqsRollscreenService {
      */
     private static final int UNKNOWN_OPEN_PERCENT = 0;
 
+    /** 구역 제어기의 개방률 제어 태그 */
+    private static final String TAG_POSITION = "pos";
+    /** 구역 제어기의 정지 제어 태그 (2026-10-26) */
+    private static final String TAG_STOP = "stop";
+
     private final HqsRollscreenRepository hqsRollscreenRepository;
     private final DeviceControlService deviceControlService;
+    private final ObjectMapper objectMapper;
 
     /* ════════════════════════════════════════════════════════════════
      * 조회
@@ -108,8 +117,9 @@ public class HqsRollscreenService {
         String floorName = resolveFloorName(request.florId());
         String groupCode = request.groupId().trim();
 
-        Tuple target = hqsRollscreenRepository.findControlPoint(groupCode, floorName)
-                .orElseThrow(() -> new IllegalArgumentException(describeControlFailure(groupCode, floorName, request.florId())));
+        Tuple target = hqsRollscreenRepository.findControlPoint(groupCode, floorName, TAG_POSITION)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        describeControlFailure(groupCode, floorName, request.florId(), TAG_POSITION)));
 
         Long commandPointId = ((Number) target.get("command_point_id")).longValue();
         String sendValue = String.valueOf(toPosition(request.openPercent()));
@@ -123,13 +133,58 @@ public class HqsRollscreenService {
     }
 
     /**
+     * 구역 정지 (2026-10-26) — 그 구역 {@code CONTROLLER} 멤버의 {@code stop} 제어 포인트를 실행한다.
+     *
+     * <p>보내는 값은 코드에 두지 않는다 — 제어 포인트 선택지(ENUM)의 <b>첫 번째 value</b> 를 쓴다
+     * (현재 {@code [{"label":"정지","value":"1"}]} → {@code 1}). 선택지가 바뀌어도 코드를 고칠 필요가 없다.
+     * 실행·검증·XN 중계·감사 로그는 {@code control} 과 같은 {@code DeviceControlService} 를 탄다.</p>
+     *
+     * @throws IllegalArgumentException 층·구역을 못 찾았거나 정지 제어 포인트가 없거나 선택지가 비었을 때
+     */
+    @Transactional
+    public HqsRollscreenControlData stop(HqsRollscreenStopRequest request) {
+        String floorName = resolveFloorName(request.florId());
+        String groupCode = request.groupId().trim();
+
+        Tuple target = hqsRollscreenRepository.findControlPoint(groupCode, floorName, TAG_STOP)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        describeControlFailure(groupCode, floorName, request.florId(), TAG_STOP)));
+
+        Long commandPointId = ((Number) target.get("command_point_id")).longValue();
+        String sendValue = firstOptionValue((String) target.get("options"));
+        if (sendValue == null) {
+            throw new IllegalArgumentException("정지 제어 포인트에 선택지(전송값)가 없습니다. groupId=" + groupCode
+                    + " commandPointId=" + commandPointId + " — 제어 포인트 관리에서 선택지를 등록하세요.");
+        }
+
+        // 실패는 예외로 전파한다 — 삼켜서 "success" 를 주면 HQS 는 멈춘 줄 안다.
+        deviceControlService.control(new DeviceControlRequest(commandPointId, sendValue));
+
+        log.info("[롤스크린정지] florId={} group={} → stop={} commandPointId={}",
+                request.florId(), groupCode, sendValue, commandPointId);
+        return HqsRollscreenControlData.success();
+    }
+
+    /** ENUM 선택지 JSON({@code [{"label":"정지","value":"1"}]})의 첫 value. 없거나 형식이 다르면 null */
+    private String firstOptionValue(String optionsJson) {
+        if (optionsJson == null || optionsJson.isBlank()) return null;
+        try {
+            JsonNode first = objectMapper.readTree(optionsJson).path(0).path("value");
+            return first.isMissingNode() || first.isNull() || first.asText().isBlank() ? null : first.asText();
+        } catch (Exception e) {
+            log.warn("[롤스크린정지] 선택지 JSON 해석 실패 '{}': {}", optionsJson, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * 제어 대상을 못 찾은 이유를 가른다.
      *
      * <p>"그룹이 없다"와 "제어 포인트가 등록되지 않았다"는 전혀 다른 문제다. 앞은 요청이
      * 잘못된 것이고, 뒤는 우리 데이터가 덜 찬 것이다. 같은 메시지로 뭉뚱그리면 상대가
      * 자기 요청을 의심하며 시간을 버린다.</p>
      */
-    private String describeControlFailure(String groupCode, String floorName, String florId) {
+    private String describeControlFailure(String groupCode, String floorName, String florId, String tagName) {
         List<Object[]> rows = hqsRollscreenRepository.findGroupByCode(groupCode);
         if (rows.isEmpty()) {
             return "구역을 찾을 수 없습니다. groupId=" + groupCode;
@@ -139,8 +194,8 @@ public class HqsRollscreenService {
             return "구역의 층이 다릅니다. groupId=" + groupCode
                     + " 요청층=" + florId + " 실제층=" + groupFloor;
         }
-        return "제어 포인트가 등록되지 않은 구역입니다. groupId=" + groupCode
-                + " — 구역 제어기의 pos 제어 포인트를 먼저 등록해야 합니다.";
+        return (TAG_STOP.equals(tagName) ? "정지 제어 포인트가" : "제어 포인트가") + " 등록되지 않은 구역입니다. groupId=" + groupCode
+                + " — 구역 제어기의 " + tagName + " 제어 포인트를 먼저 등록해야 합니다.";
     }
 
     /* ════════════════════════════════════════════════════════════════

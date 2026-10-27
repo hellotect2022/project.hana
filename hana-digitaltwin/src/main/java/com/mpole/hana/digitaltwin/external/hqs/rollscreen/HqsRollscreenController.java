@@ -5,6 +5,7 @@ import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenContr
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenControlRequest;
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenListData;
 import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenListRequest;
+import com.mpole.hana.digitaltwin.external.hqs.rollscreen.dto.HqsRollscreenStopRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -63,6 +64,19 @@ public class HqsRollscreenController {
     public ResponseEntity<HqsApiResponse<HqsRollscreenControlData>> control(
             @Valid @RequestBody HqsRollscreenControlRequest request) {
         HqsRollscreenControlData data = hqsRollscreenService.control(request);
+        return ResponseEntity.ok(HqsApiResponse.success(data));
+    }
+
+    @PostMapping("/stop")
+    @Operation(summary = "롤스크린 구역 정지",
+            description = "움직이는 롤스크린을 그 자리에서 멈춘다(2026-10-26). 요청은 /control 에서 openPercent 만 뺀 모양이다. "
+                    + "groupId 는 group_code(RS.F003.Z013)이고, 그 구역 CONTROLLER 의 stop 제어 포인트가 명령을 받는다. "
+                    + "보내는 값은 그 제어 포인트 선택지의 첫 값이다(현재 1). "
+                    + "구역 없음·층 불일치·정지 제어 포인트 미등록은 사유가 담긴 400 이 나간다. "
+                    + "정지는 목표값을 바꾸지 않으므로 목록의 openPercent 는 마지막으로 보낸 목표값 그대로다.")
+    public ResponseEntity<HqsApiResponse<HqsRollscreenControlData>> stop(
+            @Valid @RequestBody HqsRollscreenStopRequest request) {
+        HqsRollscreenControlData data = hqsRollscreenService.stop(request);
         return ResponseEntity.ok(HqsApiResponse.success(data));
     }
 }

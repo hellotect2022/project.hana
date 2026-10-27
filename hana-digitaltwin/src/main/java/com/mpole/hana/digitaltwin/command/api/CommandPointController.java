@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.SortDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -53,7 +54,13 @@ public class CommandPointController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long categoryId,
             @Parameter(hidden = true)
-            @PageableDefault(size = 20, sort = "commandPointId", direction = Sort.Direction.DESC) Pageable pageable
+            //@PageableDefault(size = 20, sort = "commandPointId", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 20)
+            @SortDefault.SortDefaults({
+            @SortDefault(sort = "device.deviceName", direction = Sort.Direction.ASC),
+            @SortDefault(sort = "sortOrder",         direction = Sort.Direction.ASC),
+            @SortDefault(sort = "commandPointId",    direction = Sort.Direction.ASC)
+}) Pageable pageable
     ) {
         Page<CommandPointResponse> result = commandPointService.page(keyword, categoryId, pageable);
         return ResponseEntity.ok(ApiResponse.success("제어 포인트 페이지 조회", result));
