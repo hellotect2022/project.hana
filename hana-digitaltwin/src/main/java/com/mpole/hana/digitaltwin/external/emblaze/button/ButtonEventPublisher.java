@@ -38,6 +38,9 @@ import java.util.Map;
  *
  * <p>전송은 비동기다. {@code send()} 는 리스너 스레드를 막지 않고, 실패는 별도 로그 한 줄로 남는다
  * (trace 는 "producer 에 넘김" 까지만 안다). 재전송 큐는 없다 — HQS 전송과 같은 노선.</p>
+ *
+ * <p>2026-10-26 — light·space 큐({@code EmblazeStatusRouter})와 부스 재실 판정 occ({@code BoothCurrentValueWriter})도
+ * {@code hdt.integration.emblaze.publish-via-event=true}(기본)면 이 클래스로 발행한다. 이름은 버튼에서 시작해 그대로 둔다.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -131,5 +134,50 @@ public class ButtonEventPublisher {
         }
         trace.ok("kafka", written);
         return written;
+    }
+
+    /**
+     * 포인트 1건을 번들로 발행한다 — digitaltwin 이 만든 파생값(부스 재실 판정 occ 등)용 (2026-10-26).
+     * event 서버가 태그 단위 병합(MERGE)으로 기록하므로 같은 장비의 다른 태그는 남는다.
+     *
+     * @return 발행했으면 true(전송 결과는 비동기 로그)
+     */
+    public boolean publishPoint(Long deviceId, String deviceKey, String tagName, String value, OffsetDateTime eventAt) {
+        if (deviceId == null || tagName == null || tagName.isBlank()) {
+            log.warn("[EmblazeEvent] 발행 생략 — deviceId/tagName 없음 deviceId={} tagName={}", deviceId, tagName);
+            return false;
+        }
+        PointMeta meta = amqpPointMappingCache.resolveMeta(deviceId, tagName);
+        DeviceBundle bundle = DeviceBundle.builder()
+                .deviceId(deviceId)
+                .deviceKey(deviceKey)
+                .timestamp(eventAt)
+                .points(List.of(XnPointData.builder()
+                        .deviceId(deviceId)
+                        .pointId(meta != null ? meta.pointId() : null)
+                        .pointkey(meta != null ? meta.pointKey() : null)
+                        .deviceCode(meta != null ? meta.deviceCode() : null)
+                        .pointCode(meta != null ? meta.pointCode() : null)
+                        .objectType(meta != null ? meta.objectType() : null)
+                        .pointDisplayName(meta != null ? meta.pointDisplayName() : null)
+                        .unit(meta != null ? meta.unit() : null)
+                        .tagName(tagName)
+                        .valueRaw(value)
+                        .updateDatetime(eventAt)
+                        .build()))
+                .build();
+
+        kafkaTemplate.send(topic, String.valueOf(deviceId), bundle)
+                .whenComplete((result, e) -> {
+                    if (e != null) {
+                        log.error("[EmblazeEvent] Kafka 발행 실패(유실) topic={} deviceKey={} tag={}: {}",
+                                topic, deviceKey, tagName, e.getMessage());
+                        return;
+                    }
+                    var md = result.getRecordMetadata();
+                    log.debug("[EmblazeEvent] Kafka 발행 성공 topic={} partition={} offset={} deviceKey={} tag={} value={}",
+                            md.topic(), md.partition(), md.offset(), deviceKey, tagName, value);
+                });
+        return true;
     }
 }
